@@ -53,11 +53,10 @@ void BP_GetStats(SIM_stats *curStats);
 
 //Cell class for cell in BTB
 class Cell{
+public:
 	unsigned int tag;
 	unsigned int target;
-	char history;
 
-public:
 	Cell();
 
 	Cell (const Cell &cell);
@@ -68,18 +67,22 @@ class Btb{
 	unsigned btbSize;
 	unsigned historySize;
 	unsigned tagSize;
-	unsigned fsmState;
 	bool isGlobalHist;
 	bool isGlobalTable;
-	int Shared;
+	int shared;
 	Cell* ptr_table;
-	char* fsm;
+	char* history;
+	char** fsm;
+	char history_fsm_state;
+	unsigned shared_mask;
+	unsigned btb_mask;
+	unsigned tag_mask;
 
 
 public:
 
 	Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
-			bool isGlobalHist, bool isGlobalTable, int Shared);
+			bool isGlobalHist, bool isGlobalTable, int shared);
 
 	~Btb();
 
