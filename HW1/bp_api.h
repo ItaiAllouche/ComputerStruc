@@ -25,7 +25,7 @@ typedef struct {
  * return 0 on success, otherwise (init failure) return <0
  */
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
-bool isGlobalHist, bool isGlobalTable, int Shared);
+bool isGlobalHist, bool isGlobalTable, int shared);
 
 /*
  * BP_predict - returns the predictor's prediction (taken / not taken) and predicted target address
@@ -53,10 +53,11 @@ void BP_GetStats(SIM_stats *curStats);
 
 //Cell class for cell in BTB
 class Cell{
-public:
+	int pc;
 	unsigned int tag;
 	unsigned int target;
 
+public:
 	Cell();
 
 	Cell (const Cell &cell);
@@ -67,16 +68,18 @@ class Btb{
 	unsigned btbSize;
 	unsigned historySize;
 	unsigned tagSize;
+	unsigned fsmState;
 	bool isGlobalHist;
 	bool isGlobalTable;
 	int shared;
 	Cell* ptr_table;
 	char* history;
 	char** fsm;
-	char history_fsm_state;
+	char history_fsm_state;	//LH_LFSM || LH_GFSM || GH_LFSM || GH_GFSM
 	unsigned shared_mask;
 	unsigned btb_mask;
 	unsigned tag_mask;
+	SIM_stats* stats;
 
 
 public:
