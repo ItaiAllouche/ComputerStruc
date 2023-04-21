@@ -57,9 +57,9 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		this->isGlobalTable = isGlobalTable;
 		this->shared = shared;
 		this->ptr_table = new Cell[btbSize];
-		this->shared_mask = 0xFFFF;;
-		this->btb_mask = 0xFFFF;
-		this->tag_mask = 0xFFFF;
+		this->shared_mask = 0xFFFFFFFF;
+		this->btb_mask = 0xFFFFFFFF;
+		this->tag_mask = 0xFFFFFFFF;
 		this->stats = 0;
 
 
@@ -86,18 +86,24 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 			shared_mask = ~shared_mask;
 			shared_mask <<= 16;
 		}
+		printf("shared mask is:0x%x\n",shared_mask);
 
 		//initiate btb_mask
 		int num_of_bits = (int)log2((double)btbSize);
+		printf("num of bits is:%d\n",num_of_bits);
 		btb_mask <<= num_of_bits;
+		printf("1btb_mask is:0x%x\n",btb_mask);
 		//btb_mask << btbSize;
 		btb_mask = ~btb_mask;
+		printf("2btb_mask is:0x%x\n",btb_mask);
 		btb_mask <<= 2;
+		printf("btb_mask is:0x%x\n",btb_mask);
 
 		//initiate tag_mask
 		tag_mask <<= tagSize;
 		tag_mask = ~tag_mask;
 		tag_mask <<= (2 + num_of_bits);
+		printf("btag_mask is:0x%x\n",tag_mask);
 
 		int history_vec_size = isGlobalHist ? 1 : btbSize;
 		int fsm_size = 1;
@@ -383,6 +389,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 }
 
 bool Btb::predict(uint32_t pc, uint32_t *dst){
+	//printf("btb mask is: 0x%x", btb_mask);
 	int btb_index = pc & btb_mask;
 	unsigned tag = pc & tag_mask;
 	btb_index >>= 2;
