@@ -53,11 +53,11 @@ void BP_GetStats(SIM_stats *curStats);
 
 //Cell class for cell in BTB
 class Cell{
+public:
 	int pc;
 	unsigned int tag;
 	unsigned int target;
 
-public:
 	Cell();
 
 	Cell (const Cell &cell);
