@@ -4,6 +4,7 @@
 #ifndef BP_API_H_
 #define BP_API_H_
 
+#include <cstdio>
 #include <stdbool.h>
 #include <stdint.h>
 #include <math.h>
@@ -81,9 +82,7 @@ class Btb{
 	unsigned tag_mask;
 	SIM_stats* stats;
 
-
 public:
-
 	Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
 			bool isGlobalHist, bool isGlobalTable, int shared);
 

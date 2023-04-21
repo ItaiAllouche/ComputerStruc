@@ -378,7 +378,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	}
 
 	//update stats
-	stats->br_num++;
+	//stats->br_num++;
 	return;
 }
 
@@ -457,17 +457,18 @@ void Btb::getStats(SIM_stats *curStats){
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
 			bool isGlobalHist, bool isGlobalTable, int shared){
 
-	*btb = Btb(btbSize, historySize, tagSize, fsmState,
-		isGlobalHist, isGlobalTable, shared);			
+	btb = new Btb(btbSize, historySize, tagSize, fsmState,
+		isGlobalHist, isGlobalTable, shared);	
 	return 0;
 }
 
 bool BP_predict(uint32_t pc, uint32_t *dst){
+	// return true;
 	return btb->predict(pc, dst);
 }
 
 void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
-	btb->update(pc, targetPc, taken, pred_dst);
+	//btb->update(pc, targetPc, taken, pred_dst);
 	return;
 }
 
