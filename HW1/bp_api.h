@@ -60,7 +60,6 @@ public:
 	unsigned int target;
 
 	Cell();
-
 	Cell (const Cell &cell);
 };
 
@@ -80,6 +79,7 @@ class Btb{
 	unsigned shared_mask;
 	unsigned btb_mask;
 	unsigned tag_mask;
+	char hist_mask;
 	SIM_stats* stats;
 
 public:

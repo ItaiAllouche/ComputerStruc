@@ -9,15 +9,16 @@
 #define WT 0x10
 #define ST 0x11
 
-#define USING_SHARE_LSB 0
-#define USING_SHARE_MID 1
-#define NOT_USING_SHARE 2
+#define NOT_USING_SHARE 0
+#define USING_SHARE_LSB 1
+#define USING_SHARE_MID 2
 #define EMPTY -1
 #define LH_LFSM 0
 #define LH_GFSM 1
 #define GH_LFSM 2
 #define GH_GFSM 3
-#define ADDRESS_LENGTH 32
+#define ADDRESS_LENGTH 30
+#define VALID_BIT 1
 
 using namespace std;
 
@@ -60,7 +61,13 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		this->shared_mask = 0xFFFFFFFF;
 		this->btb_mask = 0xFFFFFFFF;
 		this->tag_mask = 0xFFFFFFFF;
-		this->stats = 0;
+		this->hist_mask = 0xFF;
+		this->stats = new SIM_stats;
+		this->stats->flush_num = 0;
+		this->stats->br_num = 0;
+		this->stats->size = 0;
+
+		// printf("flush num is: %d br num is: %d size is: %d\n", stats->flush_num, stats->br_num,stats->size);
 
 
 		if(!isGlobalHist && !isGlobalTable)
@@ -86,42 +93,37 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 			shared_mask = ~shared_mask;
 			shared_mask <<= 16;
 		}
-		printf("shared mask is:0x%x\n",shared_mask);
+		// printf("shared mask is:0x%x\n",shared_mask);
 
 		//initiate btb_mask
 		int num_of_bits = (int)log2((double)btbSize);
-		printf("num of bits is:%d\n",num_of_bits);
 		btb_mask <<= num_of_bits;
-		printf("1btb_mask is:0x%x\n",btb_mask);
-		//btb_mask << btbSize;
 		btb_mask = ~btb_mask;
-		printf("2btb_mask is:0x%x\n",btb_mask);
 		btb_mask <<= 2;
-		printf("btb_mask is:0x%x\n",btb_mask);
+		// printf("btb_mask is:0x%x\n",btb_mask);
 
 		//initiate tag_mask
 		tag_mask <<= tagSize;
 		tag_mask = ~tag_mask;
 		tag_mask <<= (2 + num_of_bits);
-		printf("btag_mask is:0x%x\n",tag_mask);
+		// printf("tag_mask is:0x%x\n",tag_mask);
 
+		//initiate hist_mask
+		hist_mask <<= historySize;
+		hist_mask = ~hist_mask;
+		//printf("hist_mask is: 0x%x\n",hist_mask);
+		
+		int fsm_size = (int)pow(2, historySize);
+		int fsm_columns = isGlobalTable ? 1 : btbSize;
 		int history_vec_size = isGlobalHist ? 1 : btbSize;
-		int fsm_size = 1;
+
+		//allocate history vector
 		this->history = new char[history_vec_size];
 
-		//local fsm machines
-		if(!isGlobalTable){;
-			fsm_size = (int)pow(2, historySize);
-			this->fsm = new char*[fsm_size];
-			for(int i=0; i < fsm_size; i++){
-				this->fsm[i] = new char[btbSize];
-			}
-
-		}
-
-		//check if is it the right way of allocation*******************************
-		else{
-			this->fsm = new char*[(int)pow(2, historySize)];
+		//allocate fsms table
+		this->fsm = new char*[fsm_size];
+		for(int i=0; i < fsm_size; i++){
+			this->fsm[i] = new char[fsm_columns];
 		}
 
 		//initiate fsm machines and history vector
@@ -144,6 +146,9 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	btb_index >>= 2;
 	tag >>= (2 + btbSize);
 
+	printf("history: 0x%x\n",history[btb_index] & hist_mask);
+	printf("our prediction: 0x%x\n",fsm[(int)(history[btb_index] & hist_mask)][btb_index]);
+
 	//current branch alreday exsits in Btb
 	if(ptr_table[btb_index].tag == tag){
 
@@ -155,24 +160,25 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				if(taken){
 
 					//flush routine
-					if(fsm[(int)history[btb_index]][btb_index]  < 0x10 || pred_dst != targetPc){
+					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index]  < 0x10 || pred_dst != targetPc){
 						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
 
 					//update fsm 
-					if(fsm[(int)history[btb_index]][btb_index] != ST){
-						fsm[(int)history[btb_index]][btb_index]++;
+					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index] != ST){
+						fsm[(int)(history[btb_index] & hist_mask)][btb_index]++;
 					}
 				}
 				else{
 					//flush routine
-					if(fsm[(int)history[btb_index]][btb_index] > 0x1 || pred_dst != targetPc){
+					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index] > 0x1){
+						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
 
-					if(fsm[(int)history[btb_index]][btb_index] != SNT){
-						fsm[(int)history[btb_index]][btb_index]--;
+					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index] != SNT){
+						fsm[(int)(history[btb_index] & hist_mask)][btb_index]--;
 					}
 				}	
 				break;
@@ -365,8 +371,11 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 		}//finish updating history vector
 	}
 	
-	//cuurent branch doesnt exists in Btb
+	//cuurent branch doesnt exist in Btb
 	else{
+		if(taken){
+			stats->flush_num++;
+		}
 		ptr_table[btb_index].pc = pc; 
 		ptr_table[btb_index].tag = (pc & tag_mask) >> (2 + btbSize);
 		ptr_table[btb_index].target = targetPc;
@@ -374,22 +383,31 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 		//local hist
 		if(history_fsm_state == LH_GFSM || history_fsm_state == LH_LFSM){
 			history[btb_index] = 0;
+			history[btb_index] <<= 1;
+			if(taken){
+				history[btb_index]++;
+			}
 		}
 
 		//local fsm
 		if(history_fsm_state == LH_LFSM || history_fsm_state == GH_LFSM){
 			int fsm_size = (int)pow(2, historySize);
 			fsmInitiate(fsm, fsm_size, btb_index, fsmState);
+			if(taken){
+				fsm[0][btb_index]++;
+			}
+			else{
+				fsm[0][btb_index]--;
+			}
 		}
 	}
 
 	//update stats
-	//stats->br_num++;
+	stats->br_num++;
 	return;
 }
 
 bool Btb::predict(uint32_t pc, uint32_t *dst){
-	//printf("btb mask is: 0x%x", btb_mask);
 	int btb_index = pc & btb_mask;
 	unsigned tag = pc & tag_mask;
 	btb_index >>= 2;
@@ -418,7 +436,7 @@ bool Btb::predict(uint32_t pc, uint32_t *dst){
 		prediction = fsm[fsm_index][fsm_column];	
 	}
 	else{
-		prediction = fsm[(int)history[history_column]][fsm_column];	
+		prediction = fsm[(int)(history[history_column] & hist_mask)][fsm_column];	
 	}
 	
 	
@@ -438,7 +456,7 @@ bool Btb::predict(uint32_t pc, uint32_t *dst){
 void Btb::getStats(SIM_stats *curStats){
 
 	//calc predictior size [Bits]
-	stats->size = btbSize*(tagSize + ADDRESS_LENGTH);
+	stats->size = btbSize*(tagSize + ADDRESS_LENGTH + VALID_BIT);
 
 	//memory size from history vector
 	if(isGlobalHist) {
@@ -450,16 +468,17 @@ void Btb::getStats(SIM_stats *curStats){
 
 	//memory size from fsm
 	if(isGlobalTable){
-		stats->size += (int)pow(2, historySize);
+		stats->size += (int)pow(2, historySize)*2;
 	}
 	else{
-		stats->size += btbSize*(int)pow(2, historySize);
+		stats->size += btbSize*(int)pow(2, historySize)*2;
 	}
 
-	curStats = this->stats;
+	curStats->br_num = this->stats->br_num;
+	curStats->flush_num = this->stats->flush_num;
+	curStats->size = this->stats->size;
 	return;
 }
-
 
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
 			bool isGlobalHist, bool isGlobalTable, int shared){
@@ -470,12 +489,12 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 }
 
 bool BP_predict(uint32_t pc, uint32_t *dst){
-	// return true;
+	 //return true;
 	return btb->predict(pc, dst);
 }
 
 void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
-	//btb->update(pc, targetPc, taken, pred_dst);
+	btb->update(pc, targetPc, taken, pred_dst);
 	return;
 }
 
