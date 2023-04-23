@@ -4,10 +4,10 @@
 #include "bp_api.h"
 
 //4 FSM states
-#define SNT 0x00
-#define WNT 0x01
-#define WT 0x10
-#define ST 0x11
+#define SNT 0
+#define WNT 1
+#define WT 2
+#define ST 3
 
 #define NOT_USING_SHARE 0
 #define USING_SHARE_LSB 1
@@ -42,11 +42,6 @@ Cell::Cell(){
 	this->target = 0;
 };
 
-// Cell::Cell(const Cell &cell):
-// 	pc(cell.pc),
-// 	tag(cell.tag),
-// 	target(cell.target){};
-
 //constructor for Btb class
 Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
 		 bool isGlobalHist, bool isGlobalTable, int shared){
@@ -61,14 +56,11 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		this->shared_mask = 0xFFFFFFFF;
 		this->btb_mask = 0xFFFFFFFF;
 		this->tag_mask = 0xFFFFFFFF;
-		this->hist_mask = 0xFF;
+		this->hist_mask = 0xFFFFFFFF;
 		this->stats = new SIM_stats;
 		this->stats->flush_num = 0;
 		this->stats->br_num = 0;
 		this->stats->size = 0;
-
-		// printf("flush num is: %d br num is: %d size is: %d\n", stats->flush_num, stats->br_num,stats->size);
-
 
 		if(!isGlobalHist && !isGlobalTable)
 			this->history_fsm_state = LH_LFSM;
@@ -100,7 +92,7 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		btb_mask <<= num_of_bits;
 		btb_mask = ~btb_mask;
 		btb_mask <<= 2;
-		// printf("btb_mask is:0x%x\n",btb_mask);
+		//printf("btb_mask is:0x%x\n",btb_mask);
 
 		//initiate tag_mask
 		tag_mask <<= tagSize;
@@ -111,7 +103,6 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		//initiate hist_mask
 		hist_mask <<= historySize;
 		hist_mask = ~hist_mask;
-		//printf("hist_mask is: 0x%x\n",hist_mask);
 		
 		int fsm_size = (int)pow(2, historySize);
 		int fsm_columns = isGlobalTable ? 1 : btbSize;
@@ -127,8 +118,8 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		}
 
 		//initiate fsm machines and history vector
-		for(unsigned current_fsm=0; current_fsm < btbSize; current_fsm++){
-			fsmInitiate(this->fsm, current_fsm, fsm_size, fsmState);
+		for(unsigned current_fsm = 0; current_fsm < btbSize; current_fsm++){
+			fsmInitiate(this->fsm, fsm_size, current_fsm, fsmState);
 		}
 		histInitiate(this->history, history_vec_size);
 	}
@@ -142,69 +133,71 @@ Btb::~Btb(){
 
 void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	int btb_index = pc & btb_mask;
+	int fsm_row;
 	unsigned tag = pc & tag_mask;
 	btb_index >>= 2;
 	tag >>= (2 + btbSize);
 
-	printf("history: 0x%x\n",history[btb_index] & hist_mask);
-	printf("our prediction: 0x%x\n",fsm[(int)(history[btb_index] & hist_mask)][btb_index]);
+	//printf("our prediction: 0x%x\n",fsm[(int)(history[btb_index] & hist_mask)][btb_index]);
 
 	//current branch alreday exsits in Btb
 	if(ptr_table[btb_index].tag == tag){
 
-		//updating fsm and target if neccesery
+		//updating fsm and target if needed
 		switch(history_fsm_state){
 
 			//local hist & local fsm
 			case LH_LFSM:
+				fsm_row = (int)(history[btb_index] & hist_mask);
 				if(taken){
 
 					//flush routine
-					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index]  < 0x10 || pred_dst != targetPc){
+					if(fsm[fsm_row][btb_index]  < 0x10 || pred_dst != targetPc){
 						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
 
 					//update fsm 
-					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index] != ST){
-						fsm[(int)(history[btb_index] & hist_mask)][btb_index]++;
+					if(fsm[fsm_row][btb_index] != ST){
+						fsm[fsm_row][btb_index]++;
 					}
 				}
 				else{
 					//flush routine
-					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index] > 0x1){
+					if(fsm[fsm_row][btb_index] > 0x1){
 						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
 
-					if(fsm[(int)(history[btb_index] & hist_mask)][btb_index] != SNT){
-						fsm[(int)(history[btb_index] & hist_mask)][btb_index]--;
+					if(fsm[fsm_row][btb_index] != SNT){
+						fsm[fsm_row][btb_index]--;
 					}
 				}	
 				break;
 
 			//global hist & local fsm
 			case GH_LFSM:
+				fsm_row = (int)(history[0] & hist_mask);
 				if(taken){
 
 					//flush routine
-					if((int)fsm[(int)history[btb_index]][btb_index]  < 0x10 || pred_dst != targetPc){
+					if(fsm[fsm_row][btb_index]  < 0x10 || pred_dst != targetPc){
 						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
 
-					if(fsm[(int)history[0]][btb_index] != ST){
-						fsm[(int)history[0]][btb_index]++;
+					if(fsm[fsm_row][btb_index] != ST){
+						fsm[fsm_row][btb_index]++;
 					}
 				}
 				else{
 					//flush routine
-					if(fsm[(int)history[btb_index]][btb_index] > 0x1 || pred_dst != targetPc){
+					if(fsm[fsm_row][btb_index] > 0x1 || pred_dst != targetPc){
 						stats->flush_num ++;
 					}
 
-					if(fsm[(int)history[0]][btb_index] != SNT){
-						fsm[(int)history[0]][btb_index]--;
+					if(fsm[fsm_row][btb_index] != SNT){
+						fsm[fsm_row][btb_index]--;
 					}
 				}				
 				break;
@@ -213,70 +206,74 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 			case LH_GFSM:
 				if(taken){
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						int fsm_index = ptr_table[btb_index].pc & shared_mask;	
+						fsm_row = ptr_table[btb_index].pc & shared_mask;	
 						if(shared == USING_SHARE_LSB){
-							fsm_index >>= 2;
+							fsm_row >>= 2;
 						}
 						else{
-							fsm_index >>= 16;
+							fsm_row >>= 16;
 						}
 
-						fsm_index ^= history[btb_index];
+						fsm_row ^= (int)(history[btb_index] & hist_mask);
 
-						//flush ruotine
-						if(fsm[fsm_index][0] < 0x10 || pred_dst != targetPc){
+						//flush routine
+						if(fsm[fsm_row][0] < 0x10 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
-						if(fsm[fsm_index][0] != ST){
-							fsm[fsm_index][0]++;
+						if(fsm[fsm_row][0] != ST){
+							fsm[fsm_row][0]++;
 						}
 					}
 					else{
-						//flush ruotine
-						if(fsm[(int)history[btb_index]][0] < 0x10 || pred_dst != targetPc){
+						fsm_row = (int)(history[btb_index] & hist_mask);
+
+						//flush routine
+						if(fsm[fsm_row][0] < 0x10 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
-						if(fsm[(int)history[btb_index]][0] != ST){
-							fsm[(int)history[btb_index]][0]++;
+						if(fsm[fsm_row][0] != ST){
+							fsm[fsm_row][0]++;
 						}	
 					};
 				}
 				
 				else{
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						int fsm_index = ptr_table[btb_index].pc & shared_mask;	
+						int fsm_row = ptr_table[btb_index].pc & shared_mask;	
 						if(shared == USING_SHARE_LSB){
-							fsm_index >>= 2;
+							fsm_row >>= 2;
 						}
 						else{
-							fsm_index >>= 16;
+							fsm_row >>= 16;
 						}
 
-						fsm_index ^= history[btb_index];
+						fsm_row ^= (history[btb_index] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_index][0] > 0x1 || pred_dst != targetPc){
+						if(fsm[fsm_row][0] > 0x1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
-						if(fsm[fsm_index][0] != SNT){
-							fsm[fsm_index][0]--;
+						if(fsm[fsm_row][0] != SNT){
+							fsm[fsm_row][0]--;
 						}
 					}
 
 					else{
+						fsm_row = (int)(history[btb_index] & hist_mask);
+
 						//flush routine
-						if(fsm[(int)history[btb_index]][0] > 0x1 || pred_dst != targetPc){
+						if(fsm[fsm_row][0] > 0x1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
-						if(fsm[(int)history[btb_index]][0] != SNT){
-							fsm[(int)history[btb_index]][0]--;
+						if(fsm[fsm_row][0] != SNT){
+							fsm[fsm_row][0]--;
 						}	
 					}
 				}
@@ -286,70 +283,73 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 			case GH_GFSM:
 				if(taken){
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						int fsm_index = ptr_table[btb_index].pc & shared_mask;	
+						int fsm_row = ptr_table[btb_index].pc & shared_mask;	
 						if(shared == USING_SHARE_LSB){
-							fsm_index >>= 2;
+							fsm_row >>= 2;
 						}
 						else{
-							fsm_index >>= 16;
+							fsm_row >>= 16;
 						}
 
-						fsm_index ^= history[0];
+						fsm_row ^= (history[0] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_index][0]  < 0x10 || pred_dst != targetPc){
+						if(fsm[fsm_row][0]  < 0x10 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}	
 
-						if(fsm[fsm_index][0] != ST){
-							fsm[fsm_index][0]++;
+						if(fsm[fsm_row][0] != ST){
+							fsm[fsm_row][0]++;
 						}
 					}
 					else{
+						fsm_row = (int)(history[0] & hist_mask);
+
 						//flush routine
-						if(fsm[(int)history[0]][0]  < 0x10 || pred_dst != targetPc){
+						if(fsm[fsm_row][0]  < 0x10 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
-						if(fsm[(int)history[0]][0] != ST){
-							fsm[(int)history[0]][0]++;
+						if(fsm[fsm_row][0] != ST){
+							fsm[fsm_row][0]++;
 						}	
 					}
 				}
 				else{
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						int fsm_index = ptr_table[btb_index].pc & shared_mask;	
+						int fsm_row = ptr_table[btb_index].pc & shared_mask;	
 						if(shared == USING_SHARE_LSB){
-							fsm_index >>= 2;
+							fsm_row >>= 2;
 						}
 						else{
-							fsm_index >>= 16;
+							fsm_row >>= 16;
 						}
 
-						fsm_index ^= history[0];
+						fsm_row ^= (history[0] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_index][0] > 0x1 || pred_dst != targetPc){
+						if(fsm[fsm_row][0] > 0x1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
-						if(fsm[fsm_index][0] != SNT){
-							fsm[fsm_index][0]--;
+						if(fsm[fsm_row][0] != SNT){
+							fsm[fsm_row][0]--;
 						}
 					}
 					else{
+						fsm_row = (int)(history[0] & hist_mask);
 
 						//flush routine
-						if(fsm[(int)history[0]][0] > 0x1 || pred_dst != targetPc){
+						if(fsm[fsm_row][0] > 0x1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
-						if(fsm[(int)history[0]][0] != SNT){
-							fsm[(int)history[0]][0]--;
+						if(fsm[fsm_row][0] != SNT){
+							fsm[fsm_row][0]--;
 						}	
 					}
 				}
@@ -362,43 +362,145 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 			if(taken){
 				history[0]++;
 			}
+			history[0] = history[0] & hist_mask;
 		}
 		else{
 			history[btb_index] <<= 1;
 			if(taken){
 				history[btb_index]++;
 			}
-		}//finish updating history vector
+			history[btb_index] = history[btb_index] & hist_mask;
+		}
+		//finish updating history vector
 	}
 	
 	//cuurent branch doesnt exist in Btb
 	else{
+
+		//when the branch wasnt found in Btb, we predicted not taken
 		if(taken){
 			stats->flush_num++;
 		}
+
+		//insert to brnach to the table
 		ptr_table[btb_index].pc = pc; 
 		ptr_table[btb_index].tag = (pc & tag_mask) >> (2 + btbSize);
 		ptr_table[btb_index].target = targetPc;
 
-		//local hist
-		if(history_fsm_state == LH_GFSM || history_fsm_state == LH_LFSM){
-			history[btb_index] = 0;
-			history[btb_index] <<= 1;
-			if(taken){
-				history[btb_index]++;
-			}
-		}
+		//update history vector and fsm table according to history_fsm_state
+		int fsm_size = (int)pow(2, historySize);
+		switch(history_fsm_state){
 
-		//local fsm
-		if(history_fsm_state == LH_LFSM || history_fsm_state == GH_LFSM){
-			int fsm_size = (int)pow(2, historySize);
-			fsmInitiate(fsm, fsm_size, btb_index, fsmState);
-			if(taken){
-				fsm[0][btb_index]++;
-			}
-			else{
-				fsm[0][btb_index]--;
-			}
+			//local hist & local fsm
+			case LH_LFSM:
+
+				//update fsm
+				fsmInitiate(fsm, fsm_size, btb_index, fsmState);
+				if(taken){
+					fsm[0][btb_index]++;
+				}
+				else{
+					fsm[0][btb_index]--;
+				}
+
+				//update history
+				history[btb_index] = 0;
+				history[btb_index] <<= 1;
+				if(taken){
+					history[btb_index]++;
+				}
+				history[btb_index] = history[btb_index] & hist_mask;				
+				break;
+
+			//global hist & local fsm
+			case GH_LFSM:
+				fsm_row = int(history[0] & hist_mask);
+
+				//update fsm
+				fsmInitiate(fsm, fsm_size, btb_index, fsmState);
+				if(taken){
+					fsm[fsm_row][btb_index]++;
+				}
+				else{
+					fsm[fsm_row][btb_index]--;
+				}
+
+				//update history
+				history[0] <<= 1;
+				if(taken){
+					history[0]++;
+				}
+				history[0] = history[0] & hist_mask;
+				break;
+			//local hist & global fsm
+			case LH_GFSM:
+
+				//calculate fsm_row
+				if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
+					fsm_row = ptr_table[btb_index].pc & shared_mask;	
+					if(shared == USING_SHARE_LSB){
+						fsm_row >>= 2;
+					}
+					else{
+						fsm_row >>= 16;
+					}
+
+					fsm_row ^= (history[btb_index] & hist_mask);
+				}
+				else{
+					fsm_row = int(history[btb_index] & hist_mask);
+				}
+
+				//update fsm
+				if(taken && fsm[fsm_row][0] != ST){
+					fsm[fsm_row][0]++;
+				}
+				else if(!taken && fsm[fsm_row][0] != SNT){
+					fsm[fsm_row][0]--;
+				}
+
+				//update history
+				history[btb_index] <<= 1;
+				if(taken){
+					history[btb_index]++;
+				}
+				history[btb_index] = history[btb_index] & hist_mask;
+				break;
+
+			//global hist & global fsm
+			case GH_GFSM:
+
+				//calculate fsm_row
+				if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
+					fsm_row = ptr_table[btb_index].pc & shared_mask;	
+					if(shared == USING_SHARE_LSB){
+						fsm_row >>= 2;
+					}
+					else{
+						fsm_row >>= 16;
+					}
+
+					fsm_row ^= (history[0] & hist_mask);
+				}
+				else{
+					fsm_row = int(history[0] & hist_mask);
+				}
+
+				//update fsm
+				if(taken && fsm[fsm_row][0] != ST){
+					fsm[fsm_row][0]++;
+				}
+				else if(!taken && fsm[fsm_row][0] != SNT){
+					fsm[fsm_row][0]--;
+				}
+
+				//update history
+				history[0] <<= 1;
+				if(taken){
+					history[0]++;
+				}
+				history[0] = history[0] & hist_mask;
+				break;
 		}
 	}
 
@@ -424,7 +526,7 @@ bool Btb::predict(uint32_t pc, uint32_t *dst){
 	int prediction;
 
 	if(isGlobalTable && shared != NOT_USING_SHARE){
-		int fsm_index = pc & shared_mask;	
+		unsigned fsm_index = pc & shared_mask;	
 		if(shared == USING_SHARE_LSB){
 			fsm_index >>= 2;
 		}
@@ -432,13 +534,12 @@ bool Btb::predict(uint32_t pc, uint32_t *dst){
 			fsm_index >>= 16;
 		}
 
-		fsm_index ^= history[history_column];
-		prediction = fsm[fsm_index][fsm_column];	
+		fsm_index = fsm_index ^ (history[history_column] & hist_mask);
+		prediction = fsm[fsm_index][fsm_column];
 	}
 	else{
 		prediction = fsm[(int)(history[history_column] & hist_mask)][fsm_column];	
 	}
-	
 	
 	//prdict taken
 	if(prediction == ST || prediction == WT){
@@ -451,6 +552,7 @@ bool Btb::predict(uint32_t pc, uint32_t *dst){
 		*dst = pc + 4;
 		return false;
 	}
+	
 }
 
 void Btb::getStats(SIM_stats *curStats){
@@ -489,7 +591,6 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 }
 
 bool BP_predict(uint32_t pc, uint32_t *dst){
-	 //return true;
 	return btb->predict(pc, dst);
 }
 
