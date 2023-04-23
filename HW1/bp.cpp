@@ -152,7 +152,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				if(taken){
 
 					//flush routine
-					if(fsm[fsm_row][btb_index]  < 0x10 || pred_dst != targetPc){
+					if(fsm[fsm_row][btb_index] < 2 || pred_dst != targetPc){
 						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
@@ -164,7 +164,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				}
 				else{
 					//flush routine
-					if(fsm[fsm_row][btb_index] > 0x1){
+					if(fsm[fsm_row][btb_index] > 1){
 						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
@@ -181,7 +181,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				if(taken){
 
 					//flush routine
-					if(fsm[fsm_row][btb_index]  < 0x10 || pred_dst != targetPc){
+					if(fsm[fsm_row][btb_index]  < 2 || pred_dst != targetPc){
 						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
@@ -192,7 +192,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				}
 				else{
 					//flush routine
-					if(fsm[fsm_row][btb_index] > 0x1 || pred_dst != targetPc){
+					if(fsm[fsm_row][btb_index] > 1 || pred_dst != targetPc){
 						stats->flush_num ++;
 					}
 
@@ -217,7 +217,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row ^= (int)(history[btb_index] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0] < 0x10 || pred_dst != targetPc){
+						if(fsm[fsm_row][0] < 2 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
@@ -230,7 +230,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row = (int)(history[btb_index] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0] < 0x10 || pred_dst != targetPc){
+						if(fsm[fsm_row][0] < 2 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
@@ -254,7 +254,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row ^= (history[btb_index] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0] > 0x1){
+						if(fsm[fsm_row][0] > 1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
@@ -267,7 +267,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row = (int)(history[btb_index] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0] > 0x1){
+						if(fsm[fsm_row][0] > 1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
@@ -294,7 +294,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row ^= (history[0] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0]  < 0x10 || pred_dst != targetPc){
+						if(fsm[fsm_row][0]  < 2 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}	
@@ -307,7 +307,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row = (int)(history[0] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0]  < 0x10 || pred_dst != targetPc){
+						if(fsm[fsm_row][0]  < 2 || pred_dst != targetPc){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
@@ -330,7 +330,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row ^= (history[0] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0] > 0x1){
+						if(fsm[fsm_row][0] > 1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
@@ -343,7 +343,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 						fsm_row = (int)(history[0] & hist_mask);
 
 						//flush routine
-						if(fsm[fsm_row][0] > 0x1){
+						if(fsm[fsm_row][0] > 1){
 							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
@@ -357,7 +357,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 		}//finish updating fsm
 
 		//updating history vector
-		if(history_fsm_state > 0x1){
+		if(history_fsm_state > 1){
 			history[0] <<= 1;
 			if(taken){
 				history[0]++;
