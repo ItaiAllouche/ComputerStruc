@@ -29,7 +29,6 @@ using namespace std;
 //Cell class for cell in BTB
 class Cell{
 public:
-	int pc;
 	unsigned int tag;
 	unsigned int target;
 
@@ -71,7 +70,6 @@ public:
 };
 
 Btb* btb;
-int i = 0;
 
 void fsmInitiate(char** fsm, int fsm_size, int current_fsm, int unsigned fsmState){
 	for(int i = 0; i < fsm_size; i++){
@@ -93,7 +91,6 @@ void tableInitiate(Cell* ptr_table, unsigned btbSize){
 }
 
 Cell::Cell(){
-	this->pc = 0;
 	this->tag = 0;
 	this->target = 0;
 };
@@ -215,10 +212,8 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	unsigned tag = pc & tag_mask;
 	btb_index >>= 2;
 	tag >>= (2 + num_of_bits);
-	//printf("btb index  is: %d\n",btb_index);
 
 	//current branch alreday exsits in Btb
-	//printf("current tag in table is 0x%x\n",ptr_table[btb_index].tag);
 	if(ptr_table[btb_index].tag == tag){
 
 		//updating fsm and target
@@ -281,7 +276,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 			case LH_GFSM:
 				if(taken){
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						fsm_row = ptr_table[btb_index].pc & shared_mask;	
+						fsm_row = pc & shared_mask;
 						if(shared == USING_SHARE_LSB){
 							fsm_row >>= 2;
 						}
@@ -317,7 +312,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				
 				else{
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						int fsm_row = ptr_table[btb_index].pc & shared_mask;	
+						int fsm_row = pc & shared_mask;	
 						if(shared == USING_SHARE_LSB){
 							fsm_row >>= 2;
 						}
@@ -355,7 +350,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 			case GH_GFSM:
 				if(taken){
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						int fsm_row = ptr_table[btb_index].pc & shared_mask;	
+						int fsm_row = pc & shared_mask;	
 						if(shared == USING_SHARE_LSB){
 							fsm_row >>= 2;
 						}
@@ -389,7 +384,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				}
 				else{
 					if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-						int fsm_row = ptr_table[btb_index].pc & shared_mask;	
+						int fsm_row = pc & shared_mask;	
 						if(shared == USING_SHARE_LSB){
 							fsm_row >>= 2;
 						}
@@ -454,7 +449,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 		}
 
 		//insert brnach to the table
-		ptr_table[btb_index].pc = pc; 
 		ptr_table[btb_index].tag = (pc & tag_mask) >> (2 + num_of_bits);
 		ptr_table[btb_index].target = targetPc;
 
@@ -510,7 +504,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 				//calculate fsm_row
 				if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-					fsm_row = ptr_table[btb_index].pc & shared_mask;	
+					fsm_row = pc & shared_mask;	
 					if(shared == USING_SHARE_LSB){
 						fsm_row >>= 2;
 					}
@@ -544,7 +538,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 				//calculate fsm_row
 				if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
-					fsm_row = ptr_table[btb_index].pc & shared_mask;	
+					fsm_row = pc & shared_mask;	
 					if(shared == USING_SHARE_LSB){
 						fsm_row >>= 2;
 					}
@@ -582,10 +576,8 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 }
 
 bool Btb::predict(uint32_t pc, uint32_t *dst){
-	//("hist vector is: 0x%x\n",history[31] & hist_mask);
 	int btb_index = pc & btb_mask;
 	unsigned tag = pc & tag_mask;
-	//printf("pc is 0x%x\n",pc);
 	btb_index >>= 2;
 	tag >>= (2 + num_of_bits);
 
