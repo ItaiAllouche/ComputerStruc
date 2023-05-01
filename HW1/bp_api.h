@@ -4,10 +4,12 @@
 #ifndef BP_API_H_
 #define BP_API_H_
 
-#include <cstdio>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
-#include <math.h>
 
 /* A structure to return information about the currect simulator state */
 typedef struct {
@@ -26,7 +28,7 @@ typedef struct {
  * return 0 on success, otherwise (init failure) return <0
  */
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
-bool isGlobalHist, bool isGlobalTable, int shared);
+bool isGlobalHist, bool isGlobalTable, int Shared);
 
 /*
  * BP_predict - returns the predictor's prediction (taken / not taken) and predicted target address
@@ -52,48 +54,8 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
 void BP_GetStats(SIM_stats *curStats);
 
 
-//Cell class for cell in BTB
-class Cell{
-public:
-	int pc;
-	unsigned int tag;
-	unsigned int target;
-
-	Cell();
-	Cell (const Cell &cell);
-};
-
-//Btb calss
-class Btb{
-	unsigned btbSize;
-	unsigned historySize;
-	unsigned tagSize;
-	unsigned fsmState;
-	bool isGlobalHist;
-	bool isGlobalTable;
-	int shared;
-	Cell* ptr_table;
-	char* history;
-	char** fsm;
-	char history_fsm_state;	//LH_LFSM || LH_GFSM || GH_LFSM || GH_GFSM
-	unsigned shared_mask;
-	unsigned btb_mask;
-	unsigned tag_mask;
-	unsigned hist_mask;
-	SIM_stats* stats;
-
-public:
-	Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
-			bool isGlobalHist, bool isGlobalTable, int shared);
-
-	~Btb();
-
-	bool predict(uint32_t pc, uint32_t *dst);
-
-	void update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
-
-	void getStats(SIM_stats *curStats);
-};
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* BP_API_H_ */

@@ -2,6 +2,8 @@
 /* This file should hold your implementation of the predictor simulator */
 
 #include "bp_api.h"
+#include <math.h>
+#include <cstdio>
 
 //4 FSM states
 #define SNT 0
@@ -22,7 +24,54 @@
 
 using namespace std;
 
+
+
+//Cell class for cell in BTB
+class Cell{
+public:
+	int pc;
+	unsigned int tag;
+	unsigned int target;
+
+	Cell();
+	Cell (const Cell &cell);
+};
+
+//Btb calss
+class Btb{
+	unsigned btbSize;
+	unsigned historySize;
+	unsigned tagSize;
+	unsigned fsmState;
+	bool isGlobalHist;
+	bool isGlobalTable;
+	int shared;
+	Cell* ptr_table;
+	char* history;
+	char** fsm;
+	char history_fsm_state;	//LH_LFSM || LH_GFSM || GH_LFSM || GH_GFSM
+	unsigned shared_mask;
+	unsigned btb_mask;
+	unsigned tag_mask;
+	unsigned hist_mask;
+	int num_of_bits;
+	SIM_stats* stats;
+
+public:
+	Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
+			bool isGlobalHist, bool isGlobalTable, int shared);
+
+	~Btb();
+
+	bool predict(uint32_t pc, uint32_t *dst);
+
+	void update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
+
+	void getStats(SIM_stats *curStats);
+};
+
 Btb* btb;
+int i = 0;
 
 void fsmInitiate(char** fsm, int fsm_size, int current_fsm, int unsigned fsmState){
 	for(int i = 0; i < fsm_size; i++){
@@ -33,6 +82,13 @@ void fsmInitiate(char** fsm, int fsm_size, int current_fsm, int unsigned fsmStat
 void histInitiate(char history[], int history_vec_size){
 	for(int i=0; i<history_vec_size; i++){
 		history[i] = 0;
+	}
+}
+
+//initiate all tag values in table to -1
+void tableInitiate(Cell* ptr_table, unsigned btbSize){
+	for(unsigned i=0; i<btbSize; i++){
+		ptr_table[i].tag = -1;
 	}
 }
 
@@ -61,6 +117,7 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		this->stats->flush_num = 0;
 		this->stats->br_num = 0;
 		this->stats->size = 0;
+		int num_of_bits = (int)log2((double)btbSize);
 
 		if(!isGlobalHist && !isGlobalTable)
 			this->history_fsm_state = LH_LFSM;
@@ -74,6 +131,9 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 		else 
 			this->history_fsm_state = GH_GFSM;
 
+		//initiate ptr_table tag values to -1
+		tableInitiate(ptr_table, btbSize);
+
 		//initate shared_mask if needed
 		if(isGlobalTable && shared == USING_SHARE_LSB){
 			shared_mask <<= historySize;
@@ -85,20 +145,16 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 			shared_mask = ~shared_mask;
 			shared_mask <<= 16;
 		}
-		// printf("shared mask is:0x%x\n",shared_mask);
 
 		//initiate btb_mask
-		int num_of_bits = (int)log2((double)btbSize);
 		btb_mask <<= num_of_bits;
 		btb_mask = ~btb_mask;
 		btb_mask <<= 2;
-		//printf("btb_mask is:0x%x\n",btb_mask);
 
 		//initiate tag_mask
 		tag_mask <<= tagSize;
 		tag_mask = ~tag_mask;
 		tag_mask <<= (2 + num_of_bits);
-		// printf("tag_mask is:0x%x\n",tag_mask);
 
 		//initiate hist_mask
 		hist_mask <<= historySize;
@@ -117,18 +173,40 @@ Btb::Btb(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmS
 			this->fsm[i] = new char[fsm_columns];
 		}
 
-		//initiate fsm machines and history vector
-		for(unsigned current_fsm = 0; current_fsm < btbSize; current_fsm++){
-			fsmInitiate(this->fsm, fsm_size, current_fsm, fsmState);
+		//initiate fsm machines
+		if(!isGlobalTable){
+			for(unsigned current_fsm = 0; current_fsm < btbSize; current_fsm++){
+				fsmInitiate(this->fsm, fsm_size, current_fsm, fsmState);
+			}
 		}
+		else{
+			fsmInitiate(this->fsm, fsm_size, 0, fsmState);
+			}
+
+		//initiate history vector
 		histInitiate(this->history, history_vec_size);
 	}
 
 //distractor for Btb class
 Btb::~Btb(){
-	delete this->ptr_table;
-	delete this->history;
-	delete this->fsm;
+	delete[] this->ptr_table;
+	delete[] this->history;
+
+	int fsm_size = (int)pow(2, historySize);
+
+	//deallocation of fsm, according to global/local fsm
+	if(!isGlobalTable && fsm != NULL){
+		for(int i=0; i < fsm_size; i++){
+			delete[] this->fsm[i];
+		}
+		delete[] this->fsm;
+	}
+	else if(isGlobalTable && fsm != NULL){
+		delete[] this->fsm[0];
+		delete[] this->fsm;
+	}
+
+	delete this->stats;
 }
 
 void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
@@ -136,14 +214,14 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 	int fsm_row;
 	unsigned tag = pc & tag_mask;
 	btb_index >>= 2;
-	tag >>= (2 + btbSize);
-
-	//printf("our prediction: 0x%x\n",fsm[(int)(history[btb_index] & hist_mask)][btb_index]);
+	tag >>= (2 + num_of_bits);
+	//printf("btb index  is: %d\n",btb_index);
 
 	//current branch alreday exsits in Btb
+	//printf("current tag in table is 0x%x\n",ptr_table[btb_index].tag);
 	if(ptr_table[btb_index].tag == tag){
 
-		//updating fsm and target if needed
+		//updating fsm and target
 		switch(history_fsm_state){
 
 			//local hist & local fsm
@@ -153,7 +231,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 					//flush routine
 					if(fsm[fsm_row][btb_index] < 2 || pred_dst != targetPc){
-						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
 
@@ -165,7 +242,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				else{
 					//flush routine
 					if(fsm[fsm_row][btb_index] > 1){
-						ptr_table[btb_index].target = targetPc;
 						stats->flush_num ++;
 					}
 
@@ -181,8 +257,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				if(taken){
 
 					//flush routine
-					if(fsm[fsm_row][btb_index]  < 2 || pred_dst != targetPc){
-						ptr_table[btb_index].target = targetPc;
+					if(fsm[fsm_row][btb_index] < 2 || pred_dst != targetPc){
 						stats->flush_num ++;
 					}
 
@@ -192,7 +267,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				}
 				else{
 					//flush routine
-					if(fsm[fsm_row][btb_index] > 1 || pred_dst != targetPc){
+					if(fsm[fsm_row][btb_index] > 1){
 						stats->flush_num ++;
 					}
 
@@ -218,7 +293,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 						//flush routine
 						if(fsm[fsm_row][0] < 2 || pred_dst != targetPc){
-							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
@@ -255,7 +329,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 						//flush routine
 						if(fsm[fsm_row][0] > 1){
-							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 						if(fsm[fsm_row][0] != SNT){
@@ -268,7 +341,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 						//flush routine
 						if(fsm[fsm_row][0] > 1){
-							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
@@ -295,7 +367,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 						//flush routine
 						if(fsm[fsm_row][0]  < 2 || pred_dst != targetPc){
-							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}	
 
@@ -308,7 +379,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 						//flush routine
 						if(fsm[fsm_row][0]  < 2 || pred_dst != targetPc){
-							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
@@ -331,7 +401,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 						//flush routine
 						if(fsm[fsm_row][0] > 1){
-							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
@@ -344,7 +413,6 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 						//flush routine
 						if(fsm[fsm_row][0] > 1){
-							ptr_table[btb_index].target = targetPc;
 							stats->flush_num ++;
 						}
 
@@ -354,7 +422,10 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 					}
 				}
 				break;
-		}//finish updating fsm
+		}//finish updating fsm and target
+
+		//updating target
+		ptr_table[btb_index].target = targetPc;
 
 		//updating history vector
 		if(history_fsm_state > 1){
@@ -382,9 +453,9 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 			stats->flush_num++;
 		}
 
-		//insert to brnach to the table
+		//insert brnach to the table
 		ptr_table[btb_index].pc = pc; 
-		ptr_table[btb_index].tag = (pc & tag_mask) >> (2 + btbSize);
+		ptr_table[btb_index].tag = (pc & tag_mask) >> (2 + num_of_bits);
 		ptr_table[btb_index].target = targetPc;
 
 		//update history vector and fsm table according to history_fsm_state
@@ -396,16 +467,15 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 				//update fsm
 				fsmInitiate(fsm, fsm_size, btb_index, fsmState);
-				if(taken){
+				if(taken && fsm[0][btb_index] != ST){
 					fsm[0][btb_index]++;
 				}
-				else{
+				else if(!taken && fsm[0][btb_index] != SNT){
 					fsm[0][btb_index]--;
 				}
 
 				//update history
 				history[btb_index] = 0;
-				history[btb_index] <<= 1;
 				if(taken){
 					history[btb_index]++;
 				}
@@ -418,10 +488,10 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 				//update fsm
 				fsmInitiate(fsm, fsm_size, btb_index, fsmState);
-				if(taken){
+				if(taken && fsm[fsm_row][btb_index] != ST){
 					fsm[fsm_row][btb_index]++;
 				}
-				else{
+				else if(!taken && fsm[fsm_row][btb_index] != SNT){
 					fsm[fsm_row][btb_index]--;
 				}
 
@@ -434,6 +504,9 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 				break;
 			//local hist & global fsm
 			case LH_GFSM:
+			
+				//flush history vector
+				history[btb_index] = 0;
 
 				//calculate fsm_row
 				if(shared == USING_SHARE_LSB || shared == USING_SHARE_MID){
@@ -459,8 +532,7 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 					fsm[fsm_row][0]--;
 				}
 
-				//update history
-				history[btb_index] <<= 1;
+				//update history vector
 				if(taken){
 					history[btb_index]++;
 				}
@@ -510,10 +582,12 @@ void Btb::update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 }
 
 bool Btb::predict(uint32_t pc, uint32_t *dst){
+	//("hist vector is: 0x%x\n",history[31] & hist_mask);
 	int btb_index = pc & btb_mask;
 	unsigned tag = pc & tag_mask;
+	//printf("pc is 0x%x\n",pc);
 	btb_index >>= 2;
-	tag >>= (2 + btbSize);
+	tag >>= (2 + num_of_bits);
 
 	//current branch doesnt exists in Btb -> predict not taken
 	if(ptr_table[btb_index].tag != tag){
@@ -601,6 +675,7 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 void BP_GetStats(SIM_stats *curStats){
 	btb->getStats(curStats);
+	delete btb;
 	return;
 }
 
