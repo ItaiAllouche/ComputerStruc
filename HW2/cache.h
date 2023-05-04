@@ -13,22 +13,30 @@
 using namespace std;
 typedef unsigned int uint;
 
+class Pair{
+public:
+    bool table_is_full;
+    bool elem_found;
+    int assoc_lvl;
+
+    //constracotr
+    Pair();
+}
+
 class CacheCell{
 public:
     bool valid;    
     bool dirty;
     uint tag;
-    char set;
 
-    //unnecessary? we only check if the block is in the cache
-    unsigned data;
-
-//constructor
-CacheCell();
+    //constructor
+    CacheCell();
 };
 
 class Cache{
 public:
+    char cache_lvl;
+    Cache* minor_cache;
     unsigned size;
     unsigned cycles;
     unsigned block_size;
@@ -38,9 +46,9 @@ public:
 
     //each set has its own list.
     //elements at front are hot, elements at back are cold  
-    //notice- contains lvl+1. exmp: block at lvl1 assoc will
+    //notice: contains lvl+1. exmp: block at lvl=1 assoc will
     //represented by the number 2 
-    lit* access_list;
+    list* access_list;
     unsigned tag_mask;
     unsigned set_mask;
     int table_rows;
@@ -48,39 +56,51 @@ public:
     int tot_miss;
 
     //constructor
-    Cache(unsigned size, unsigned cycles, unsigned block_size, bool write_allocate, unsigned assoc);
+    Cache(char cache_lvl, unsigned size, unsigned cycles, unsigned block_size, bool write_allocate, unsigned assoc);
 
     //distractor
     ~Cache();
 
-    //return assoc lvl is case block was founded
-    // other wise return -1
-    int isInTable(unsigned tag, unsigned set);
+    //returns pair
+    //in case element was found elem_found = true
+    // in case set lvl is full table_is_full = true 
+    // else, assoc_lvl = free lvl
+    Pair isInTable(unsigned tag, unsigned set);
 
-    //method for write command
-    void writeAction(string str_pc);
+    //update cache accoring to corrent command
+    void update(unsigned tag, unsigned set, char command);
 
-    //method for write allocate policy - in case of write miss
-    void writeAllocate(unsigned tag, unsigned set);
-
-    //method for write not allocate policy - in case of write miss
-    void writeNotAllocate(unsigned tag, unsigned set);
-
-    //method for read command
-    void readAction(uint pc);
-
-    // get tag value from pc 
+    //get tag value from pc 
     unsigned getTag(uint pc);
 
     // get set value from pc 
     unsigned getSet(uint pc);
 
+    //in case of write miss and the set level is full
     //finds the lru element in list, swap to new element
-    // and returns the access lvl.
-    int listSWapElem(unsigned tag, unsigned set); 
+    //returns the assoc lvl.
+    int listSwapElem(unsigned tag, unsigned set); 
 
+    //in case of write hit
     //update element position in list
-    void listUpdateElem(unsigned tag, unsigned set); 
+    void listUpdateElem(unsigned set);
+
+    //write hit handler
+    void writeHitHandler(unsigned set, int assoc_lvl);
+
+
+    // //method for write command
+    // void writeAction(string str_pc);
+
+    // //method for write allocate policy - in case of write miss
+    // void writeAllocate(unsigned tag, unsigned set);
+
+    // //method for write not allocate policy - in case of write miss
+    // void writeNotAllocate(unsigned tag, unsigned set);
+
+    // //method for read command
+    // void readAction(uint pc);
+
 };
 
 #endif //CACHE_H_

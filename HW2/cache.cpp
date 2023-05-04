@@ -3,16 +3,24 @@
 
 #define HEX 16
 #define NOT_FOUND
+#define READ 1
+#define WRITE 2
+
+Pair::Pair(){
+    this->elem_found = false;
+    this->table_is_full = true;
+    this->assoc_lvl = -1;
+}
 
 CacheCell::CacheCell(){
     this->valid = false;
     this->dirty = false;
     this->data = 0;
-    this->set = 0;
     this->tag = 0;
 }
 
-Cache::Cache(unsigned size, unsigned cycles, unsigned block_size, bool write_allocate, unsigned assoc){
+Cache::Cache(char cache_lvl, unsigned size, unsigned cycles, unsigned block_size, bool write_allocate, unsigned assoc){
+    this->cache_lvl = cache_lvl;
     this->size = size;
     this->cycles = cycles;
     this->block_size = block_size;
@@ -30,14 +38,14 @@ Cache::Cache(unsigned size, unsigned cycles, unsigned block_size, bool write_all
         this->ptr_table[i] = new CacheCell[assoc];
     }
 
-    //initiate access_list
-    this->access_list = new list<int>[assoc];
+    //initiate access_list - list per table row
+    this->access_list = new list<int>[table_rows];
 
     //initiate set mask
     set_mask <= (size - block_size);
     set_mask ~= set_mask;
 
-    // aligned to 4 Bytes 
+    // alligned to 4 Bytes 
     set_mask <= 2;
 
     //initiate tag mask
@@ -53,13 +61,24 @@ Cache::~Cache(){
     delete[] this->ptr_table;
 }
 
-int Cache::isInTable(unsigned tag, unsigned set){
+Pair Cache::isInTable(unsigned tag, unsigned set){
+    Pair res;
+    int free_lvl = -1;
     for(int lvl = 0; lvl < assoc; lvl++){
-        if(ptr_table[set][lvl].tag == tag){
-            return lvl;
+        if(ptr_table[set][lvl].tag == tag && ptr_table[set][lvl].valid){
+            res.elem_found = true;
+            res.assoc_lvl = lvl;
+            return res;
+        }
+        else if(!tr_table[set][lvl].valid && res.table_is_full){
+            free_lvl = lvl;
+            res.table_is_full = false;
         }
     }
-    return -1;
+
+    //element wasnt found 
+    res.assoc_lvl = free_lvl;
+    return res;
 }
 
 int Cache::listSwapElem(unsigned set){
@@ -72,13 +91,42 @@ int Cache::listSwapElem(unsigned set){
 }
 
 void Cache::listUpdateElem(unsigned set, int assoc_lvl){
-    access_list[set].erase(assoc_lvl-1);
-    access_list[set].pop_back(ssoc_lvl-1);
+    access_list[set].erase(assoc_lvl - 1);
+    access_list[set].pop_back(assoc_lvl - 1);
 }
 
-//cehck prev func and start with this one
+void Cache::update(unsigned tag, unsigned set, char command){
+    Pair res = isInTable(tag, set);
+
+    //cache hit
+    if(res.elem_found){
+        tot_hits++;
+
+        if(command == WRITE){
+            writeHitHandler(set, res.assoc_lvl);
+        }
+        else{
+            readHitHandler(set, res.assoc_lvl);
+        }
+    }
+
+    //cache miss
+    else{
+        tot_miss ++;
+        if(command == WRITE){
+            writeMissHandler(tag, set, res);
+        }
+        else{
+            hitMissHandler(tag, set, res);
+        }   
+    }
+}
+
+
+
+
 void Cache::writeAction(string str_pc){
-    uint pc = stoi(pc, 0 , HEX);
+    uint pc = stoi(str_pc, 0, HEX);
     unsigned tag = getTag(pc);
     unsigned set = getSet(pc);
     int assoc_lvl = isInTable(tag, set);
@@ -87,13 +135,15 @@ void Cache::writeAction(string str_pc){
     if(assoc_lvl != NOT_FOUND){
         tot_hits++;
         ptr_table[set][assoc_lvl].dirty = true;
-
+        listUpdateElem(set + 1);
     }
 
     //write miss
     else{
         tot_miss++;
-
+        int curr_lvl = listUpdateElem(set + 1);
+        addElemToTable(tag, set, curr_lvl);
+        
         //write allocate policy
         if(write_allocate){
             writeAllocate(unsigned tag, unsigned set);
@@ -104,10 +154,6 @@ void Cache::writeAction(string str_pc){
             writeNotAllocate(unsigned tag, unsigned set);
         }        
     }
-}
-
-void Cache::writeAllocate(unsigned tag, unsigned set){
-
 }
 
 
