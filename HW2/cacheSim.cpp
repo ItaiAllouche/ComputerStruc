@@ -4,6 +4,9 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include "cache.h"
+#include <stdio.h>
+#include <string.h>
 
 using std::FILE;
 using std::string;
@@ -16,6 +19,7 @@ using std::stringstream;
 int main(int argc, char **argv) {
 
 	if (argc < 19) {
+		cout << argc << endl;
 		cerr << "Not enough arguments" << endl;
 		return 0;
 	}
@@ -62,6 +66,11 @@ int main(int argc, char **argv) {
 		}
 	}
 
+
+	//initiate lvl1 cache and lvl2 cache
+	Cache* cache_lv2 = new Cache(2, NULL, L2Size, L2Cyc, BSize, WrAlloc, L2Assoc);
+	Cache* cache_lv1 = new Cache (1, cache_lv2, L1Size, L1Cyc, BSize, WrAlloc, L1Assoc);
+
 	while (getline(file, line)) {
 
 		stringstream ss(line);
@@ -73,29 +82,38 @@ int main(int argc, char **argv) {
 			return 0;
 		}
 
-		// DEBUG - remove this line
-		cout << "operation: " << operation;
 
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
-		// DEBUG - remove this line
-		cout << ", address (hex)" << cutAddress;
+		uint pc = stoi(cutAddress, 0, HEX);
+		unsigned tag = cache_lv1->getTag(pc);
+		unsigned set = cache_lv1->getSet(pc);
+		char op;
+		if(strcmp(&operation, "W") == EQUAL){
+			op = WRITE;
+		}
+		else{
+			op = READ;
+		}
 
-		unsigned long int num = 0;
-		num = strtoul(cutAddress.c_str(), NULL, 16);
-
-		// DEBUG - remove this line
-		cout << " (dec) " << num << endl;
-
+		cache_lv1->update(tag, set, op);
 	}
 
-	double L1MissRate;
-	double L2MissRate;
-	double avgAccTime;
+	printf("lvl1 tot miss are:%f\n", cache_lv1->tot_miss);
+	printf("lvl1 tot hits are:%f\n", cache_lv1->tot_hits);
+	printf("lvl1 tot access are:%f\n", cache_lv1->cache_access);
+	printf("lvl2 tot miss are:%f\n", cache_lv2->tot_miss);
+	printf("lvl2 tot hits are:%f\n", cache_lv2->tot_hits);
+	printf("lvl2 tot access are:%f\n", cache_lv2->cache_access);
+
+	double L1MissRate = cache_lv1->tot_miss / cache_lv1->cache_access;
+	double L2MissRate = cache_lv2->tot_miss / cache_lv2->cache_access;
+	double avgAccTime =  (1-L1MissRate)*L1Cyc + //lv1 hit
+						 L1MissRate*(1-L2MissRate)*(L1Cyc + L2Cyc) + // lv1 miss lv2 hit 
+						 L1MissRate*L2MissRate*(L1Cyc + L2Cyc + MemCyc); //lv1 miss lv2 miss
 
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
 	printf("AccTimeAvg=%.03f\n", avgAccTime);
-
 	return 0;
 }
