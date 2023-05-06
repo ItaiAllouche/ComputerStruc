@@ -85,8 +85,6 @@ int main(int argc, char **argv) {
 		
 		uint pc = stoi(cutAddress, 0, HEX);
 		unsigned block = cache_lv1->getBlock(pc);
-		printf("relevent pc is 0x%x\n", pc);
-		// printf("relevent block is 0x%x\n", block);
 
 		char op;
 		if(operation == "w"){

@@ -44,7 +44,12 @@ Cache::Cache(char cache_lvl, Cache* minor_cache, unsigned size, unsigned cycles,
     //initiate block mask
     block_mask <<= (32 - block_size);
     block_mask = ~block_mask;
-    block_mask <<= block_size;
+    block_mask <<= (block_size);
+    // block_mask <<= (block_size + 2);
+    // // block_mask = ~block_mask;
+    // // block_mask <<= (block_size+2);
+
+    printf("cache lvl is %d block_mask is 0x%x\n",cache_lvl, block_mask);
 
     // initiate set mask
     set_mask <<= (size - block_size);
@@ -114,9 +119,6 @@ void Cache::update(unsigned block, char oparation){
     unsigned tag = getTag(block);
     unsigned set = getSet(block);
     Pair res = isInTable(tag, set);
-    printf("cache lvl %d\n",cache_lvl);
-    printf("block %d\n",block);
-    printf("tag %d\n",tag);
 
     //cache hit
     if(res.elem_found){
@@ -263,7 +265,7 @@ void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
 
 unsigned Cache::getBlock(uint pc){
     unsigned block = pc & block_mask;
-    block >>= block_size;
+    block >>= (block_size);
     return block;
 }
 
