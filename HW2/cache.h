@@ -30,7 +30,7 @@ class CacheCell{
 public:
     bool valid;    
     bool dirty;
-    uint tag;
+    unsigned block;
 
     // constructor
     CacheCell();
@@ -52,6 +52,7 @@ public:
     // notice: contains lvl+1. exmp: block at lvl=1 assoc will
     //r epresented by the number 2 
     list<int>* access_list;
+    unsigned block_mask;
     unsigned tag_mask;
     unsigned set_mask;
     int table_rows;
@@ -72,35 +73,41 @@ public:
     // else, assoc_lvl = free lvl
     Pair isInTable(unsigned tag, unsigned set);
 
-    // update cache accoring to corrent command
-    void update(unsigned tag, unsigned set, char oparation);
+    // update cache accoring to corrent pc
+    // operation is read/write
+    void update(unsigned block, char oparation);
 
-    // get tag value from pc 
-    unsigned getTag(uint pc);
+    // get block from pc 
+    unsigned getBlock(uint pc);
 
-    // get set value from pc 
-    unsigned getSet(uint pc);
+    // get tag from block 
+    unsigned getTag(unsigned block);
 
-    // in case of cache miss and the set level is full
+    // get set value from block 
+    unsigned getSet(unsigned block);
+
+    // in case of cache miss and the set level is full -> need to evacoate block from cache
     // finds the lru element in list, swap to new element
+    // assoc_lvl is not incemented
     // returns the assoc lvl.
     int listSwapElem(unsigned set); 
 
     // in case of cache hit
     // update element position in list
+    // assoc_lvl is not incemented
     void listUpdateElem(unsigned set, int assoc_lvl);
 
     // write hit handler
     void writeHitHandler(unsigned set, int assoc_lvl);
 
     // write miss handler
-    void writeMissHandler(unsigned tag, unsigned set, Pair res);
+    void writeMissHandler(unsigned set, Pair res, unsigned block);
 
     // read hit handler
     void readHitHandler(unsigned set, int assoc_lvl);
 
     // read miss handler
-    void readMissHandler(unsigned tag, unsigned set, Pair res);
+    void readMissHandler(unsigned set, Pair res, unsigned block);
 };
 
 #endif // CACHE_H_

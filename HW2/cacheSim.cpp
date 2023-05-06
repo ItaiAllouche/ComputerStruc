@@ -66,37 +66,36 @@ int main(int argc, char **argv) {
 		}
 	}
 
-
-	//initiate lvl1 cache and lvl2 cache
 	Cache* cache_lv2 = new Cache(2, NULL, L2Size, L2Cyc, BSize, WrAlloc, L2Assoc);
 	Cache* cache_lv1 = new Cache (1, cache_lv2, L1Size, L1Cyc, BSize, WrAlloc, L1Assoc);
-
+	
 	while (getline(file, line)) {
 
 		stringstream ss(line);
 		string address;
-		char operation = 0; // read (R) or write (W)
+		string operation; // read (R) or write (W)
 		if (!(ss >> operation >> address)) {
 			// Operation appears in an Invalid format
 			cout << "Command Format error" << endl;
 			return 0;
 		}
 
-
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
+		
 		uint pc = stoi(cutAddress, 0, HEX);
-		unsigned tag = cache_lv1->getTag(pc);
-		unsigned set = cache_lv1->getSet(pc);
+		unsigned block = cache_lv1->getBlock(pc);
+		printf("relevent pc is 0x%x\n", pc);
+		// printf("relevent block is 0x%x\n", block);
+
 		char op;
-		if(strcmp(&operation, "W") == EQUAL){
+		if(operation == "w"){
 			op = WRITE;
 		}
 		else{
 			op = READ;
 		}
-
-		cache_lv1->update(tag, set, op);
+		cache_lv1->update(block, op);
 	}
 
 	printf("lvl1 tot miss are:%f\n", cache_lv1->tot_miss);
@@ -115,5 +114,7 @@ int main(int argc, char **argv) {
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
 	printf("AccTimeAvg=%.03f\n", avgAccTime);
+
+	
 	return 0;
 }
