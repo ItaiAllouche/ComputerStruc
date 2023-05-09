@@ -59,7 +59,6 @@ public:
     double tot_hits;
     double tot_miss;
     int mem_access;
-    double cache_access;
 
     // constructor
     Cache(char cache_lvl, Cache* minor_cache, unsigned size, unsigned cycles, unsigned block_size, bool write_allocate, unsigned assoc);

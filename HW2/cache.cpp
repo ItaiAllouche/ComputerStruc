@@ -27,7 +27,6 @@ Cache::Cache(char cache_lvl, Cache* minor_cache, unsigned size, unsigned cycles,
     this->tot_hits = 0;
     this->tot_miss = 0;
     this->mem_access = 0;
-    this-> cache_access = 0;
 
     // num of rows in cache is number blocks = 2^size / 2^block_size
     this->table_rows = (int)pow(2, double(size - block_size));
@@ -115,7 +114,6 @@ void Cache::listUpdateElem(unsigned set, int assoc_lvl){
 }
 
 void Cache::update(unsigned block, char oparation){
-    cache_access++;
     unsigned tag = getTag(block);
     unsigned set = getSet(block);
     Pair res = isInTable(tag, set);
@@ -182,6 +180,7 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
         // replacae lru block to new block
         // update access list and update lower lvl
         else{
+            //update access list
             int curr_lvl = listSwapElem(set);
             unsigned lru_block = ptr_table[set][curr_lvl].block;
 
@@ -192,19 +191,32 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
                 if(ptr_table[set][curr_lvl].dirty){
                     mem_access++;
                 }
+
+                //evict lru block from lv1
+                unsigned minor_set = minor_cache->getSet(lru_block);
+                unsigned minor_tag = minor_cache->getTag(lru_block); 
+                Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+                
+                if(minor_res.elem_found){
+                    int minor_lvl = minor_res.assoc_lvl;
+                    minor_cache->ptr_table[minor_set][minor_lvl].block = -1;
+                    minor_cache->ptr_table[minor_set][minor_lvl].dirty = false;
+                    minor_cache->ptr_table[minor_set][minor_lvl].valid = false;
+                }
             }
 
-            else{
+            // else{
 
-                // in case of dirty block, update lv2 cache
-                if(ptr_table[set][curr_lvl].dirty){
-                    minor_cache->update(lru_block, WRITE);
-                }               
-            }
+            //     // in case of dirty block, update lv2 cache
+            //     if(ptr_table[set][curr_lvl].dirty){
+            //         minor_cache->update(lru_block, WRITE);
+            //     }               
+            // }
 
             // update new block in cache
             ptr_table[set][curr_lvl].block = block;
-            ptr_table[set][curr_lvl].dirty = false;              
+            ptr_table[set][curr_lvl].dirty = false;
+            ptr_table[set][curr_lvl].valid = true;              
         }
     }
 
@@ -237,6 +249,7 @@ void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
     // replacae lru block to new block
     // update access list and update lower lvl
     else{
+        //update access list
         int curr_lvl = listSwapElem(set);
         unsigned lru_block = ptr_table[set][curr_lvl].block;
 
@@ -246,19 +259,33 @@ void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
             if(ptr_table[set][curr_lvl].dirty){
                 mem_access++;
             }
+
+            //evict lru block from lv1
+            unsigned minor_set = minor_cache->getSet(lru_block);
+            unsigned minor_tag = minor_cache->getTag(lru_block); 
+            Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+
+            if(minor_res.elem_found){
+                int minor_lvl = minor_res.assoc_lvl;
+                minor_cache->ptr_table[minor_set][minor_lvl].block = -1;
+                minor_cache->ptr_table[minor_set][minor_lvl].dirty = false;
+                minor_cache->ptr_table[minor_set][minor_lvl].valid = false;
+            }
+
+            // update new block in cache
+            ptr_table[set][curr_lvl].block = block;
+            ptr_table[set][curr_lvl].dirty = false;
+            ptr_table[set][curr_lvl].valid = true;             
         }
 
-        else{
+        // else{
 
-            // in case of dirty block, update lv2 cache
-            if(ptr_table[set][curr_lvl].dirty){
-                minor_cache->update(lru_block, WRITE);
-            }               
-        }
-
-        // update new block in cache and update access list
-        ptr_table[set][curr_lvl].block = block;
-        ptr_table[set][curr_lvl].dirty = false;           
+        //     // // in case of dirty block, update lv2 cache
+        //     // if(ptr_table[set][curr_lvl].dirty){
+        //     //     minor_cache->update(lru_block, WRITE);
+        //     // }               
+        // }
+       
     }
 
 }
