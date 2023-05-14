@@ -43,12 +43,9 @@ Cache::Cache(char cache_lvl, Cache* minor_cache, unsigned size, unsigned cycles,
     //initiate block mask
     block_mask <<= (32 - block_size);
     block_mask = ~block_mask;
-    block_mask <<= (block_size);
-    // block_mask <<= (block_size + 2);
-    // // block_mask = ~block_mask;
-    // // block_mask <<= (block_size+2);
+    block_mask <<= block_size;
 
-    printf("cache lvl is %d block_mask is 0x%x\n",cache_lvl, block_mask);
+    //printf("cache lvl is %d block_mask is 0x%x\n",cache_lvl, block_mask);
 
     // initiate set mask
     set_mask <<= (size - block_size);
@@ -143,7 +140,9 @@ void Cache::update(unsigned block, char oparation){
 
 void Cache::writeHitHandler(unsigned set, int assoc_lvl){
     //write back policy
-    ptr_table[set][assoc_lvl].dirty = true;
+    if(cache_lvl == 1){
+        ptr_table[set][assoc_lvl].dirty = true;
+    }
 
     //update access_list
     listUpdateElem(set, assoc_lvl);
@@ -165,14 +164,19 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
     }
 
     // write allocate policy
-    if(write_allocate){
+    if(write_allocate == 1){
 
         // table in not full
         // update table and access hist
         if(!res.table_is_full){
             ptr_table[set][res.assoc_lvl].block = block;
-            ptr_table[set][res.assoc_lvl].dirty = false;
             ptr_table[set][res.assoc_lvl].valid = true;
+            if(cache_lvl == 1){
+                ptr_table[set][res.assoc_lvl].dirty = true;
+            }
+            else{
+                ptr_table[set][res.assoc_lvl].dirty = false;
+            }
             access_list[set].push_front(res.assoc_lvl + 1);   
         }
 
@@ -192,7 +196,7 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
                     mem_access++;
                 }
 
-                //evict lru block from lv1
+                //evict lru block from lv1 (snooping)
                 unsigned minor_set = minor_cache->getSet(lru_block);
                 unsigned minor_tag = minor_cache->getTag(lru_block); 
                 Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
@@ -202,26 +206,38 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
                     minor_cache->ptr_table[minor_set][minor_lvl].block = -1;
                     minor_cache->ptr_table[minor_set][minor_lvl].dirty = false;
                     minor_cache->ptr_table[minor_set][minor_lvl].valid = false;
+                    minor_cache->access_list[minor_set].remove(minor_lvl);
                 }
             }
 
-            // else{
+            else{
 
-            //     // in case of dirty block, update lv2 cache
-            //     if(ptr_table[set][curr_lvl].dirty){
-            //         minor_cache->update(lru_block, WRITE);
-            //     }               
-            // }
+                // in case of dirty block, update lv2 access list
+                if(ptr_table[set][curr_lvl].dirty){
+                    unsigned minor_set = minor_cache->getSet(lru_block);
+                    unsigned minor_tag = minor_cache->getTag(lru_block); 
+                    Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+
+                    if(minor_res.elem_found){
+                        minor_cache->listUpdateElem(minor_set, minor_res.assoc_lvl);
+                    }
+                }               
+            }
 
             // update new block in cache
             ptr_table[set][curr_lvl].block = block;
-            ptr_table[set][curr_lvl].dirty = false;
-            ptr_table[set][curr_lvl].valid = true;              
+            ptr_table[set][curr_lvl].valid = true;
+            if(cache_lvl == 1){
+                ptr_table[set][res.assoc_lvl].dirty = true;
+            } 
+            else{
+                ptr_table[set][res.assoc_lvl].dirty = false;
+            }                                
         }
     }
 
     // in write no allocate policy we dont fetch block to cache
-    // only in the lower lvl
+    // only to the lower lvl
 }
 
 void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
@@ -270,22 +286,28 @@ void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
                 minor_cache->ptr_table[minor_set][minor_lvl].block = -1;
                 minor_cache->ptr_table[minor_set][minor_lvl].dirty = false;
                 minor_cache->ptr_table[minor_set][minor_lvl].valid = false;
-            }
-
-            // update new block in cache
-            ptr_table[set][curr_lvl].block = block;
-            ptr_table[set][curr_lvl].dirty = false;
-            ptr_table[set][curr_lvl].valid = true;             
+                minor_cache->access_list[minor_set].remove(minor_lvl);
+            }           
         }
 
-        // else{
+        else{
 
-        //     // // in case of dirty block, update lv2 cache
-        //     // if(ptr_table[set][curr_lvl].dirty){
-        //     //     minor_cache->update(lru_block, WRITE);
-        //     // }               
-        // }
-       
+            // in case of dirty block, update lv2 access list
+            if(ptr_table[set][curr_lvl].dirty){
+                unsigned minor_set = minor_cache->getSet(lru_block);
+                unsigned minor_tag = minor_cache->getTag(lru_block); 
+                Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+
+                if(minor_res.elem_found){
+                    minor_cache->listUpdateElem(minor_set, minor_res.assoc_lvl);
+                }
+            }               
+        }
+        // update new block in cache
+        ptr_table[set][curr_lvl].block = block;
+        ptr_table[set][curr_lvl].dirty = false;
+        ptr_table[set][curr_lvl].valid = true;  
+
     }
 
 }
@@ -306,6 +328,3 @@ unsigned Cache::getSet(unsigned block){
     unsigned set = block & set_mask;
     return set;
 }
-
-
-

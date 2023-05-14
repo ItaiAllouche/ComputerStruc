@@ -97,10 +97,10 @@ int main(int argc, char **argv) {
 		cache_lv1->update(block, op);
 	}
 
-	printf("lvl1 tot miss are:%f\n", cache_lv1->tot_miss);
-	printf("lvl1 tot hits are:%f\n", cache_lv1->tot_hits);
-	printf("lvl2 tot miss are:%f\n", cache_lv2->tot_miss);
-	printf("lvl2 tot hits are:%f\n", cache_lv2->tot_hits);
+	// printf("lvl1 tot miss are:%f\n", cache_lv1->tot_miss);
+	// printf("lvl1 tot hits are:%f\n", cache_lv1->tot_hits);
+	// printf("lvl2 tot miss are:%f\n", cache_lv2->tot_miss);
+	// printf("lvl2 tot hits are:%f\n", cache_lv2->tot_hits);
 
 	double L1MissRate = cache_lv1->tot_miss / (cache_lv1->tot_miss + cache_lv1->tot_hits);
 	double L2MissRate = cache_lv2->tot_miss / (cache_lv2->tot_miss + cache_lv2->tot_hits);
