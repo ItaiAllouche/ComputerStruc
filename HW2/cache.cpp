@@ -1,7 +1,7 @@
 #include "cache.h"
 #include <math.h>
 
-Pair::Pair(){
+Res::Res(){
     this->elem_found = false;
     this->table_is_full = true;
     this->assoc_lvl = -1;
@@ -28,8 +28,8 @@ Cache::Cache(char cache_lvl, Cache* minor_cache, unsigned size, unsigned cycles,
     this->tot_miss = 0;
     this->mem_access = 0;
 
-    // num of rows in cache is number blocks = 2^size / 2^block_size
-    this->table_rows = (int)pow(2, double(size - block_size));
+    // num of rows in cache is number blocks = 2^(size - assoc_levels) / 2^block_size
+    this->table_rows = (int)pow(2, double(size - log_assoc - block_size));
 
     // initiate ptr_table
     this->ptr_table = new CacheCell*[table_rows];
@@ -41,20 +41,21 @@ Cache::Cache(char cache_lvl, Cache* minor_cache, unsigned size, unsigned cycles,
     this->access_list = new list<int>[table_rows];
 
     //initiate block mask
+    // note: masking pc
     block_mask <<= (32 - block_size);
     block_mask = ~block_mask;
     block_mask <<= block_size;
 
-    //printf("cache lvl is %d block_mask is 0x%x\n",cache_lvl, block_mask);
-
     // initiate set mask
-    set_mask <<= (size - block_size);
+    // note: masking block
+    set_mask <<= (size - log_assoc - block_size);
     set_mask = ~set_mask;
 
     // initiate tag mask
-    tag_mask <<= (32 - size);
+    // note: masking block
+    tag_mask <<= (32 - size + log_assoc);
     tag_mask = ~tag_mask;
-    tag_mask <<= (size - block_size);
+    tag_mask <<= (size - log_assoc - block_size);
 }
 
 Cache::~Cache(){
@@ -62,10 +63,11 @@ Cache::~Cache(){
         delete[] this->ptr_table[i];
     }
     delete[] this->ptr_table;
+    delete [] access_list;
 }
 
-Pair Cache::isInTable(unsigned tag, unsigned set){
-    Pair res;
+Res Cache::isInTable(unsigned tag, unsigned set){
+    Res res;
     int free_lvl = -1;
     unsigned curr_tag;
     int lvl = (int)assoc - 1;
@@ -113,7 +115,7 @@ void Cache::listUpdateElem(unsigned set, int assoc_lvl){
 void Cache::update(unsigned block, char oparation){
     unsigned tag = getTag(block);
     unsigned set = getSet(block);
-    Pair res = isInTable(tag, set);
+    Res res = isInTable(tag, set);
 
     //cache hit
     if(res.elem_found){
@@ -152,7 +154,7 @@ void Cache::readHitHandler(unsigned set, int assoc_lvl){
     listUpdateElem(set, assoc_lvl);
 }
 
-void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
+void Cache::writeMissHandler(unsigned set, Res res, unsigned block){
 
     // in cace of cache lvl 1, get block from lvl 2
     if(cache_lvl == 1){
@@ -199,7 +201,7 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
                 //evict lru block from lv1 (snooping)
                 unsigned minor_set = minor_cache->getSet(lru_block);
                 unsigned minor_tag = minor_cache->getTag(lru_block); 
-                Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+                Res minor_res = minor_cache->isInTable(minor_tag, minor_set);
                 
                 if(minor_res.elem_found){
                     int minor_lvl = minor_res.assoc_lvl;
@@ -216,7 +218,7 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
                 if(ptr_table[set][curr_lvl].dirty){
                     unsigned minor_set = minor_cache->getSet(lru_block);
                     unsigned minor_tag = minor_cache->getTag(lru_block); 
-                    Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+                    Res minor_res = minor_cache->isInTable(minor_tag, minor_set);
 
                     if(minor_res.elem_found){
                         minor_cache->listUpdateElem(minor_set, minor_res.assoc_lvl);
@@ -240,7 +242,7 @@ void Cache::writeMissHandler(unsigned set, Pair res, unsigned block){
     // only to the lower lvl
 }
 
-void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
+void Cache::readMissHandler(unsigned set, Res res, unsigned block){
 
     // in case of cache lvl1 bring block from cache lvl2
     if(cache_lvl == 1){
@@ -279,7 +281,7 @@ void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
             //evict lru block from lv1
             unsigned minor_set = minor_cache->getSet(lru_block);
             unsigned minor_tag = minor_cache->getTag(lru_block); 
-            Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+            Res minor_res = minor_cache->isInTable(minor_tag, minor_set);
 
             if(minor_res.elem_found){
                 int minor_lvl = minor_res.assoc_lvl;
@@ -296,7 +298,7 @@ void Cache::readMissHandler(unsigned set, Pair res, unsigned block){
             if(ptr_table[set][curr_lvl].dirty){
                 unsigned minor_set = minor_cache->getSet(lru_block);
                 unsigned minor_tag = minor_cache->getTag(lru_block); 
-                Pair minor_res = minor_cache->isInTable(minor_tag, minor_set);
+                Res minor_res = minor_cache->isInTable(minor_tag, minor_set);
 
                 if(minor_res.elem_found){
                     minor_cache->listUpdateElem(minor_set, minor_res.assoc_lvl);
@@ -320,7 +322,7 @@ unsigned Cache::getBlock(uint pc){
 
 unsigned Cache::getTag(unsigned block){
     unsigned tag = block & tag_mask;
-    tag >>= (size - block_size);
+    tag >>= (size - (int)log2(assoc) - block_size);
     return tag;
 }
 

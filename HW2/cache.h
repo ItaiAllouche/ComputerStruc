@@ -16,14 +16,14 @@
 using namespace std;
 typedef unsigned int uint;
 
-class Pair{
+class Res{
 public:
     bool table_is_full;
     bool elem_found;
     int assoc_lvl;
 
     // constracotr
-    Pair();
+    Res();
 };
 
 class CacheCell{
@@ -70,7 +70,7 @@ public:
     //in case element was found elem_found = true
     // in case set lvl is full table_is_full = true 
     // else, assoc_lvl = free lvl
-    Pair isInTable(unsigned tag, unsigned set);
+    Res isInTable(unsigned tag, unsigned set);
 
     // update cache accoring to corrent pc
     // operation is read/write
@@ -100,13 +100,13 @@ public:
     void writeHitHandler(unsigned set, int assoc_lvl);
 
     // write miss handler
-    void writeMissHandler(unsigned set, Pair res, unsigned block);
+    void writeMissHandler(unsigned set, Res res, unsigned block);
 
     // read hit handler
     void readHitHandler(unsigned set, int assoc_lvl);
 
     // read miss handler
-    void readMissHandler(unsigned set, Pair res, unsigned block);
+    void readMissHandler(unsigned set, Res res, unsigned block);
 };
 
 #endif // CACHE_H_

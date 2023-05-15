@@ -67,7 +67,8 @@ int main(int argc, char **argv) {
 	}
 
 	Cache* cache_lv2 = new Cache(2, NULL, L2Size, L2Cyc, BSize, WrAlloc, L2Assoc);
-	Cache* cache_lv1 = new Cache (1, cache_lv2, L1Size, L1Cyc, BSize, WrAlloc, L1Assoc);
+	Cache* dummy = cache_lv2;
+	Cache* cache_lv1 = new Cache (1, dummy, L1Size, L1Cyc, BSize, WrAlloc, L1Assoc);
 	cache_lv2->minor_cache = cache_lv1;
 	
 	while (getline(file, line)) {
@@ -97,11 +98,6 @@ int main(int argc, char **argv) {
 		cache_lv1->update(block, op);
 	}
 
-	// printf("lvl1 tot miss are:%f\n", cache_lv1->tot_miss);
-	// printf("lvl1 tot hits are:%f\n", cache_lv1->tot_hits);
-	// printf("lvl2 tot miss are:%f\n", cache_lv2->tot_miss);
-	// printf("lvl2 tot hits are:%f\n", cache_lv2->tot_hits);
-
 	double L1MissRate = cache_lv1->tot_miss / (cache_lv1->tot_miss + cache_lv1->tot_hits);
 	double L2MissRate = cache_lv2->tot_miss / (cache_lv2->tot_miss + cache_lv2->tot_hits);
 	double avgAccTime =  (1-L1MissRate)*L1Cyc + //lv1 hit
@@ -112,6 +108,8 @@ int main(int argc, char **argv) {
 	printf("L2miss=%.03f ", L2MissRate);
 	printf("AccTimeAvg=%.03f\n", avgAccTime);
 
-	
+	// deallocating caches
+
+	delete cache_lv2;
 	return 0;
 }
