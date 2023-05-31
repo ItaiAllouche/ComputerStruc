@@ -16,7 +16,7 @@
 /// \returns The allocated program buffer of given maxSize entries
 InstInfo *allocProgBuffer(size_t maxSize, InstInfo *oldBuf)
 {
-    InstInfo *newBuf = realloc(oldBuf, maxSize * sizeof(InstInfo));
+    InstInfo *newBuf = (InstInfo*)realloc(oldBuf, maxSize * sizeof(InstInfo));
     if (newBuf == NULL) {
         printf("ERROR: Failed allocating program buffer for %zu instructions!\n", maxSize);
         exit(1);

@@ -10,9 +10,14 @@ extern "C" {
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 /// Maximum number of opcodes in the processor
 #define MAX_OPS 32
+#define ERROR -1
+#define SUCCESS 0
+#define UNUSED -1
+#define ENTRY -1
 
 /// Program context
 /// This is a reference to the (internal) data maintained for a given program
@@ -63,6 +68,47 @@ int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2De
     \returns The longest execution path duration in clock cycles 
 */
 int getProgDepth(ProgCtx ctx);
+
+class Node{
+    public:
+        InstInfo inst;
+        int latency;
+        int dep_idx1;
+        int dep_idx2;
+        
+        //constractor
+        Node(void);
+};
+
+/**
+ * @brief implemented with array, each command placed in the array
+ *  by its command index 
+ */
+class DepGraph{
+    public:
+        Node* graph;
+        unsigned int length;
+
+        // contains index of last command which change the register
+        int* dirty_regs;
+
+        // each bit represents if the command is ponited by exit
+        // which means no one depned on it 
+        bool* exit_vector;
+
+        // constractor
+        DepGraph(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts);
+
+        // distrctor
+        ~DepGraph();
+
+        // given a node, cacluate the longest path to "entry"
+        int getDepth(unsigned int instIdx);
+
+        int getInsDeps(unsigned int instIdx, int *src1DepInst, int *src2DepInst);
+
+        void initDirtyRegsAndExitVector(void);
+};
 
 #ifdef __cplusplus
 }
