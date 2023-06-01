@@ -1,14 +1,15 @@
 /* 046267 Computer Architecture - HW #3 */
 /* Implementation (skeleton)  for the dataflow statistics calculator */
 
-/*############ DEBUG MACROS ############*/
+#include "dflow_calc.h"
+#include "cstdio"
+
+/*########## DEBUG MACROS ##########*/
 // #define DEBUG_PRINT_NODES
 // #define DEBUG_PRINT_FULL_NODES
 // #define DEBUG_PRINT_DIRTY_REGS_EXIT_VECTOR
-/*######################################*/
+/*##################################*/
 
-#include "dflow_calc.h"
-#include "cstdio"
 
 /*############ MACROS ############*/
 #define ERROR -1
@@ -52,32 +53,16 @@ class DepGraph{
         // distrctor
         ~DepGraph();
 
-        // given a node, cacluate the longest path to "entry"
-        int getDepth(unsigned int instIdx);
-
+        // given an instuction's index, return its depth (ints -> entry)
         int getInsDeps(unsigned int instIdx, int *src1DepInst, int *src2DepInst);
 
+        // initite DirtyReg to -1 and ExitVector to true
         void initDirtyRegsAndExitVector(void);
+
+        // print dirtyReg and exitVecotr - enabled by debug macro
         void printDirtyRegsAndExitVecotr(void);
 };
 /*################################*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Node::Node(){
     this->latency = 0;
@@ -164,33 +149,10 @@ DepGraph::~DepGraph(){
     delete[] this->exit_vector;
 }
 
-int DepGraph::getDepth(unsigned int instIdx){
-
-    //stop cindition, last command before entry node
-    if(graph[instIdx].dep_idx1 == ENTRY && graph[instIdx].dep_idx1 == ENTRY){
-        return this->graph[instIdx].latency;
-    }
-
-    int node1 = 0;
-    int node2 = 0;
-
-    if(graph[instIdx].dep_idx1 != ENTRY){
-        node1 = getDepth(graph[instIdx].dep_idx1);
-    }
-    if(graph[instIdx].dep_idx1 != ENTRY){
-        node2 = getDepth(graph[instIdx].dep_idx1);
-    }
-
-    node1 += this->graph[instIdx].latency;
-    node2 += this->graph[instIdx].latency;
-
-    return node1 > node2  ? node1 : node2;
-}
-
 int DepGraph::getInsDeps(unsigned int instIdx, int *src1DepInst, int *src2DepInst){
 
     //index is invalid
-    if(instIdx > length){
+    if(instIdx < 0 || instIdx > (length + 1)){
         return ERROR;
     }
     else{
@@ -214,11 +176,10 @@ int getInstDepth(ProgCtx ctx, unsigned int theInst) {
     DepGraph* dep_graph = (DepGraph*)ctx;
 
     // invalid index
-    if(theInst < 0 || theInst > dep_graph->length){
+    if(theInst < 0 || theInst > (dep_graph->length - 1)){
         return ERROR;
     }
 
-    //return dep_graph->getDepth(theInst);
     return dep_graph->graph[theInst].depth - dep_graph->graph[theInst].latency;
 }
 
@@ -236,7 +197,6 @@ int getProgDepth(ProgCtx ctx) {
 
         // current index is node which all other nodes dont depend on
         if(dep_graph->exit_vector[i]){
-            //current_depth = dep_graph->getDepth(i);
             current_depth = dep_graph->graph[i].depth;
 
             // update max depth if necessary
