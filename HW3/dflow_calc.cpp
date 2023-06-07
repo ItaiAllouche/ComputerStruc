@@ -7,7 +7,7 @@
 /*########## DEBUG MACROS ##########*/
 // #define DEBUG_PRINT_NODES
 // #define DEBUG_PRINT_FULL_NODES
-// #define DEBUG_PRINT_DIRTY_REGS_EXIT_VECTOR
+// #define DEBUG_PRINT_DIRTY_REGS
 /*##################################*/
 
 
@@ -43,10 +43,6 @@ class DepGraph{
         // contains index of last command which change the register
         int* dirty_regs;
 
-        // each bit represents if the command is ponited by exit
-        // which means no one depned on it 
-        bool* exit_vector;
-
         // constractor
         DepGraph(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts);
 
@@ -56,11 +52,11 @@ class DepGraph{
         // given an instuction's index, return its depth (ints -> entry)
         int getInsDeps(unsigned int instIdx, int *src1DepInst, int *src2DepInst);
 
-        // initite DirtyReg to -1 and ExitVector to true
-        void initDirtyRegsAndExitVector(void);
+        // initite DirtyReg to -1
+        void initDirtyRegs(void);
 
-        // print dirtyReg and exitVecotr - enabled by debug macro
-        void printDirtyRegsAndExitVecotr(void);
+        // print dirtyReg - enabled by debug macro
+        void printDirtyRegs(void);
 };
 /*################################*/
 
@@ -71,34 +67,26 @@ Node::Node(){
     this->dep_idx2 = UNUSED;
 }
 
-void DepGraph::initDirtyRegsAndExitVector(){
+void DepGraph::initDirtyRegs(){
     for(int i = 0; i < MAX_OPS; i++){
         this->dirty_regs[i] = UNUSED;
-        this->exit_vector[i] = true;
     }
 }
 
-void DepGraph::printDirtyRegsAndExitVecotr(){
+void DepGraph::printDirtyRegs(){
         printf("dirty regs:\n");
         for(int i = 0; i < MAX_OPS; i++){
             printf("|%d|",dirty_regs[i]);
         }
-        printf("\n");
-        printf("exit vector:\n");
-        for(int i = 0; i < MAX_OPS; i++){
-            printf("|%d|",exit_vector[i]);
-        }
-        printf("\n");
 }
 
 DepGraph::DepGraph(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts){
-    this->graph = new Node[MAX_OPS];
+    this->graph = new Node[numOfInsts];
     this->length = numOfInsts;
     this->dirty_regs = new int[MAX_OPS];
-    this->exit_vector = new bool[MAX_OPS];
 
     //initilize dirty registers array
-    this->initDirtyRegsAndExitVector();
+    this->initDirtyRegs();
 
     for(unsigned int i = 0; i < numOfInsts; i++){
         graph[i].inst = progTrace[i];
@@ -115,14 +103,12 @@ DepGraph::DepGraph(const unsigned int opsLatency[], const InstInfo progTrace[], 
         // update first dependencey
         graph[i].dep_idx1 = dirty_regs[graph[i].inst.src1Idx];
         if(graph[i].dep_idx1 != UNUSED){
-            exit_vector[graph[i].dep_idx1] = false;
             dep1 += graph[graph[i].dep_idx1].depth;
         }
 
         // update second dependencey
         graph[i].dep_idx2 = dirty_regs[graph[i].inst.src2Idx];
         if(graph[i].dep_idx2 != UNUSED){
-            exit_vector[graph[i].dep_idx2] = false;
             dep2 += graph[graph[i].dep_idx2].depth;
         }
         
@@ -136,8 +122,8 @@ DepGraph::DepGraph(const unsigned int opsLatency[], const InstInfo progTrace[], 
         printf("|cmd %d|dep1 %d|dep2 %d|depth %d|latency %d|\n",i,graph[i].dep_idx1,graph[i].dep_idx2,graph[i].depth,graph[i].latency);
         #endif
 
-        #ifdef DEBUG_PRINT_DIRTY_REGS_EXIT_VECTOR
-        printDirtyRegsAndExitVecotr();
+        #ifdef DEBUG_PRINT_DIRTY_REGS
+        printDirtyRegs();
         #endif
     }
     
@@ -145,8 +131,7 @@ DepGraph::DepGraph(const unsigned int opsLatency[], const InstInfo progTrace[], 
 
 DepGraph::~DepGraph(){
     delete[] this->graph;
-    delete[] this->dirty_regs;
-    delete[] this->exit_vector;
+    delete this->dirty_regs;
 }
 
 int DepGraph::getInsDeps(unsigned int instIdx, int *src1DepInst, int *src2DepInst){
@@ -179,8 +164,7 @@ int getInstDepth(ProgCtx ctx, unsigned int theInst) {
     if(theInst < 0 || theInst > (dep_graph->length - 1)){
         return ERROR;
     }
-
-    return dep_graph->graph[theInst].depth - dep_graph->graph[theInst].latency;
+    return (dep_graph->graph[theInst].depth - dep_graph->graph[theInst].latency);
 }
 
 int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2DepInst) {
@@ -193,17 +177,14 @@ int getProgDepth(ProgCtx ctx) {
     int max_depth = 0;
     int current_depth = 0;
 
-    for(unsigned int i = 0; i < MAX_OPS; i++){
+    for(unsigned int i = 0; i < dep_graph->length; i++){
+        current_depth = dep_graph->graph[i].depth;
 
-        // current index is node which all other nodes dont depend on
-        if(dep_graph->exit_vector[i]){
-            current_depth = dep_graph->graph[i].depth;
-
-            // update max depth if necessary
-            if(current_depth > max_depth){
-                max_depth = current_depth;
-            } 
-        }
+        // update max depth if necessary
+        if(current_depth > max_depth){
+            max_depth = current_depth;
+        } 
+        
     }
     return max_depth;
 }
