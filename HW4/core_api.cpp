@@ -34,7 +34,7 @@ class Simulator{
 		const bool blockMT_mode;
 		vector<Thread*> threads_vec;
 		int tot_threads;
-		int regs[TOT_REGS];
+		int* regs;
 		int penalty; // in case of Blocked MT
 		int tot_inst;
 		int tot_cycles;
@@ -78,12 +78,12 @@ void Simulator::initVectors(){
 
 	//initilaize threads vector
 	for(int i = 0; i < tot_threads; i++){
-		threads_vec.push_back(new Thread(i, &regs));
+		Thread* new_pthread = new Thread(i, &regs);
+		threads_vec.push_back(new_pthread);
 	}
 }
 
 Simulator::Simulator(const bool mode):blockMT_mode(mode){
-	this->threads_vec = new vector<Thread*>;
 	this->regs = new int[TOT_REGS];
 	this->tot_threads = SIM_GetThreadsNum();
 	this->tot_inst = 0;
@@ -98,10 +98,10 @@ Simulator::Simulator(const bool mode):blockMT_mode(mode){
 
 Simulator::~Simulator(){
 	for(int i = 0; i < tot_threads; i++){
-		delete tot_threads[i];
+		delete threads_vec[i];
 	}
 
-	delete[] regs; 
+	delete regs; 
 }
 
 //###############################
