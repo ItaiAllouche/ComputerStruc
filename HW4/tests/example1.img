@@ -14,8 +14,8 @@
 #	LOAD $dst, $src1, $src2 	(dst <- Mem[src1 + src2]  src2 may be an immediate)
 #	STORE $dst, $src1, $src2 	(Mem[dst + src2] <- src1  src2 may be an immediate)
 
-L5  # load latency
-S3  # store latency
+L2  # load latency
+S2  # store latency
 O1  # overhead for switch
 N3  # there is three threads that run 
 
