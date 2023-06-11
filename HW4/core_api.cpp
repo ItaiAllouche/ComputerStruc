@@ -4,7 +4,10 @@
 #include "sim_api.h"
 
 #include <stdio.h>
+#include <iostream>
+#include <ostream>
 #include <vector>
+#include<algorithm>
 
 //############ MACROS ############
 #define TOT_REGS 8
@@ -23,7 +26,7 @@ class Thread{
 		const int idx;
 		int status;
 		int line;
-		int* regs;
+		int regs[REGS_COUNT];
 
 		//constractor
 		Thread(const int idx);
@@ -37,7 +40,6 @@ class Simulator{
 		const bool blockMT_mode;
 		vector<Thread*> threads_vec;
 		int tot_threads;
-		int* regs;
 		int penalty; // in case of Blocked MT
 		int tot_inst;
 		int tot_cycles;
@@ -56,7 +58,10 @@ class Simulator{
 		// otherwise returns NULL
 		Thread* getReadyThread(Thread* runnig_thread);
 
-		// returns  new/same thread to run or NULL if doesnt exists
+		// in blocked mode: returns NULL and increases
+		// tot_cycles by penalty if sim has'nt finished
+		// in fine grained mode: returns new thread to run (if exists)
+		// otherwise returns current runnig thread
 		Thread* contextSwitch(Thread* runnig_thread);
 
 		// given thread run it's next instruction
@@ -84,11 +89,6 @@ void Thread::initRegs(void){
 
 void Simulator::initVectors(){
 
-	//initilaize regs vector
-	for(int i = 0; i < TOT_REGS; i++){
-		regs[i] = 0;
-	}	
-
 	//initilaize threads vector
 	for(int i = 0; i < tot_threads; i++){
 		Thread* new_thread = new Thread(i);
@@ -97,7 +97,6 @@ void Simulator::initVectors(){
 }
 
 Simulator::Simulator(const bool blockMT_mode):blockMT_mode(blockMT_mode){
-	this->regs = new int[TOT_REGS];
 	this->tot_threads = SIM_GetThreadsNum();
 	this->tot_inst = 0;
 	this->tot_cycles = 0;
@@ -114,23 +113,27 @@ Simulator::~Simulator(){
 	for(int i = 0; i < tot_threads; i++){
 		delete threads_vec[i];
 	}
-
-	delete regs; 
 }
 
 Thread* Simulator::getReadyThread(Thread* runnig_thread){
-	for(int i = 0; i < tot_threads; i++){
 
+	int idx = (runnig_thread->idx + 1) % tot_threads;
+	int last_idx = runnig_thread->idx;
+	while(idx != last_idx){
 		// current thread is ready and is not currently runnig  
-		if((threads_vec[i]->idx != runnig_thread->idx) && (threads_vec[i]->status == READY)){
-			return threads_vec[i];
+		if(threads_vec[idx]->status == READY){
+			return threads_vec[idx];
 		}
+		idx ++;
+		idx %= tot_threads;
 	}
 	return NULL;
 }
 
 Thread* Simulator::contextSwitch(Thread* runnig_thread){
 	if(blockMT_mode){
+
+		// simulation hasnt finished
 		if(tot_halts != tot_threads){
 			tot_cycles += penalty;
 		}
@@ -142,58 +145,55 @@ Thread* Simulator::contextSwitch(Thread* runnig_thread){
 		if(ready_thread != NULL){
 			return ready_thread;
 		}
-		else if(runnig_thread->status == READY){
+		else{
 			return runnig_thread;
 		}
-		else{
-			return NULL;
-		}
 	}
-
 }
 
 void Simulator::runInst(Thread* thread){
 	Instruction inst;
 	SIM_MemInstRead(thread->line, &inst, thread->idx);
+	tot_inst ++;
 
 	switch(inst.opcode){
 		case CMD_NOP:
 			break;
 
 		case CMD_ADD:
-			regs[inst.dst_index] = regs[inst.src1_index] +  regs[inst.src2_index_imm];
+			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] +  thread->regs[inst.src2_index_imm];
 			break;
 
 
 		case CMD_SUB:
-			regs[inst.dst_index] = regs[inst.src1_index] -  regs[inst.src2_index_imm];
+			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] -  thread->regs[inst.src2_index_imm];
 			break;
 
 		case CMD_ADDI:
-			regs[inst.dst_index] = regs[inst.src1_index] +  inst.src2_index_imm;
+			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] +  inst.src2_index_imm;
 			break;
 
 		case CMD_SUBI:
-			regs[inst.dst_index] = regs[inst.src1_index] - inst.src2_index_imm;
+			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] - inst.src2_index_imm;
 			break;		
 
 		case CMD_LOAD:
-			thread->status = load_latencty;
+			thread->status = 1 + load_latencty;
 			if(inst.isSrc2Imm){
-				SIM_MemDataRead(regs[inst.src1_index] + inst.src2_index_imm, &regs[inst.dst_index]);
+				SIM_MemDataRead(thread->regs[inst.src1_index] + inst.src2_index_imm, &thread->regs[inst.dst_index]);
 			}
 			else{
-				SIM_MemDataRead(regs[inst.src1_index] + regs[inst.src2_index_imm], &regs[inst.dst_index]);
+				SIM_MemDataRead(thread->regs[inst.src1_index] + thread->regs[inst.src2_index_imm], &thread->regs[inst.dst_index]);
 			}
 			break;		
 
 		case CMD_STORE:
-			thread->status = store_latencty;
+			thread->status = 1 + store_latencty;
 			if(inst.isSrc2Imm){				
-				SIM_MemDataWrite(regs[inst.src1_index] + inst.src2_index_imm, regs[inst.src1_index]);
+				SIM_MemDataWrite(thread->regs[inst.dst_index] + inst.src2_index_imm, thread->regs[inst.src1_index]);
 			}
 			else{
-				SIM_MemDataWrite(regs[inst.src1_index] + regs[inst.src2_index_imm], regs[inst.src1_index]);
+				SIM_MemDataWrite(thread->regs[inst.dst_index] + thread->regs[inst.src2_index_imm], thread->regs[inst.src1_index]);
 			}
 			break;		
 
@@ -207,7 +207,7 @@ void Simulator::runInst(Thread* thread){
 
 void Simulator::simUpdate(){
 
-	//update waiting thread's countdown
+	//update waiting thread's countdown on each cycle
 	for(int i = 0; i < tot_threads; i++){
 		if(threads_vec[i]->status > 0){
 			threads_vec[i]->status--;
@@ -223,41 +223,53 @@ void Simulator::simUpdate(){
 Simulator* blocked_sim = NULL;
 Simulator* fine_grained_sim = NULL;
 
-void CORE_BlockedMT() {
+void CORE_BlockedMT(){
 	blocked_sim = new Simulator(BLOCKED_MT);
 	for(int idx = 0; idx < blocked_sim->tot_threads; idx++){
-		while(sim->threads_vec[idx]->status != HALT){
-			blocked_sim->runInst(blocked_sim->threads_vec[idx]);
+		while(blocked_sim->threads_vec[idx]->status != HALT){
+			if(blocked_sim->threads_vec[idx]->status == READY){
+				blocked_sim->runInst(blocked_sim->threads_vec[idx]);
+			}
 			blocked_sim->simUpdate();
 		}
 		blocked_sim->contextSwitch(blocked_sim->threads_vec[idx]);
 	}
 }
 
-void CORE_FinegrainedMT() {
+void CORE_FinegrainedMT(){
 	fine_grained_sim = new Simulator(FINE_GRAINED_MT);
 
 	//first thread to run
 	Thread* runnig_thread = fine_grained_sim->threads_vec[0];
 	while(fine_grained_sim->tot_halts != fine_grained_sim->tot_threads){
-		fine_grained_sim->runInst(runnig_thread);
+		if(runnig_thread->status == READY){
+			fine_grained_sim->runInst(runnig_thread);
+		}
 		fine_grained_sim->simUpdate();
 		runnig_thread = fine_grained_sim->contextSwitch(runnig_thread);
 	}
 }
 
 double CORE_BlockedMT_CPI(){
-	return 0;
+	if((double)blocked_sim->tot_inst == 0){
+		return -1;
+	}
+	return (double)blocked_sim->tot_cycles / (double)blocked_sim->tot_inst;
 }
 
 double CORE_FinegrainedMT_CPI(){
-	return 0;
+	if((double)fine_grained_sim->tot_inst == 0){
+		return -1;
+	}
+	return (double)fine_grained_sim->tot_cycles / (double)fine_grained_sim->tot_inst;
 }
 
-void CORE_BlockedMT_CTX(tcontext* context, int threadid) {
-	context = blocked_sim->regs;
+void CORE_BlockedMT_CTX(tcontext* context, int threadid){
+	copy_n(blocked_sim->threads_vec[threadid]->regs, REGS_COUNT, context->reg);
 	return;
 }
 
-void CORE_FinegrainedMT_CTX(tcontext* context, int threadid) {
+void CORE_FinegrainedMT_CTX(tcontext* context, int threadid){
+	copy_n(fine_grained_sim->threads_vec[threadid]->regs, REGS_COUNT, context->reg);
+	return;	
 }
