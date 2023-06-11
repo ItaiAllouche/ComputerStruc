@@ -317,17 +317,27 @@ void CORE_FinegrainedMT(){
 }
 
 double CORE_BlockedMT_CPI(){
-	if((double)blocked_sim->tot_inst == 0){
+	double tot_inst = blocked_sim->tot_inst;
+	double tot_cycles = blocked_sim->tot_cycles;
+	delete blocked_sim;
+	
+	if(tot_inst == 0){
 		return -1;
 	}
-	return (double)blocked_sim->tot_cycles / (double)blocked_sim->tot_inst;
+	
+	return tot_cycles / tot_inst;
 }
 
 double CORE_FinegrainedMT_CPI(){
-	if((double)fine_grained_sim->tot_inst == 0){
+	double tot_inst = fine_grained_sim->tot_inst;
+	double tot_cycles = fine_grained_sim->tot_cycles;
+	delete fine_grained_sim;
+	
+	if(tot_inst == 0){
 		return -1;
 	}
-	return (double)fine_grained_sim->tot_cycles / (double)fine_grained_sim->tot_inst;
+	
+	return tot_cycles / tot_inst;
 }
 
 void CORE_BlockedMT_CTX(tcontext* context, int threadid){
