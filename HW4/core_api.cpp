@@ -10,12 +10,15 @@
 #include<algorithm>
 
 //############ MACROS ############
-#define TOT_REGS 8
 #define BLOCKED_MT 1
 #define FINE_GRAINED_MT 0
 #define HALT -1
 #define READY 0
 #define NOT_READY -1
+//################################
+
+//######### DEBUG MACROS #########
+// #define DEBUG_PRINT 1
 //################################
 
 using namespace std;
@@ -82,7 +85,7 @@ Thread::Thread(const int idx):idx(idx){
 }
 
 void Thread::initRegs(void){
-	for(int i = 0; i < TOT_REGS; i++){
+	for(int i = 0; i < REGS_COUNT; i++){
 		regs[i] = 0;
 	}	
 }
@@ -135,20 +138,27 @@ Thread* Simulator::contextSwitch(Thread* runnig_thread){
 
 		// simulation hasnt finished
 		if(tot_halts != tot_threads){
-			tot_cycles += penalty;
+			for(int i = 0; i < penalty; i++){
+				simUpdate();
+			}
 		}
-		return NULL;
+	}
+
+	Thread* ready_thread = getReadyThread(runnig_thread);
+
+	if(ready_thread != NULL){
+		#ifdef DEBUG_PRINT
+		printf("			Context swtich %d->%d\n", runnig_thread->idx, ready_thread->idx);
+		#endif			
+		return ready_thread;
 	}
 	else{
-		Thread* ready_thread = getReadyThread(runnig_thread);
-
-		if(ready_thread != NULL){
-			return ready_thread;
-		}
-		else{
-			return runnig_thread;
-		}
+		#ifdef DEBUG_PRINT
+		printf("			Context swtich %d->%d\n", runnig_thread->idx, runnig_thread->idx);
+		#endif			
+		return runnig_thread;
 	}
+
 }
 
 void Simulator::runInst(Thread* thread){
@@ -157,27 +167,45 @@ void Simulator::runInst(Thread* thread){
 	tot_inst ++;
 
 	switch(inst.opcode){
-		case CMD_NOP:
+		case CMD_NOP:		
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command NOP|\n",tot_cycles, thread->idx);
+			#endif		
 			break;
 
 		case CMD_ADD:
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command ADD|\n",tot_cycles, thread->idx);
+			#endif				
 			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] +  thread->regs[inst.src2_index_imm];
 			break;
 
 
 		case CMD_SUB:
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command SUB|\n",tot_cycles, thread->idx);
+			#endif				
 			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] -  thread->regs[inst.src2_index_imm];
 			break;
 
 		case CMD_ADDI:
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command ADDI|\n",tot_cycles, thread->idx);
+			#endif				
 			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] +  inst.src2_index_imm;
 			break;
 
 		case CMD_SUBI:
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command SUBI|\n",tot_cycles, thread->idx);
+			#endif				
 			thread->regs[inst.dst_index] = thread->regs[inst.src1_index] - inst.src2_index_imm;
 			break;		
 
 		case CMD_LOAD:
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command LOAD|\n",tot_cycles, thread->idx);
+			#endif				
 			thread->status = 1 + load_latencty;
 			if(inst.isSrc2Imm){
 				SIM_MemDataRead(thread->regs[inst.src1_index] + inst.src2_index_imm, &thread->regs[inst.dst_index]);
@@ -188,6 +216,9 @@ void Simulator::runInst(Thread* thread){
 			break;		
 
 		case CMD_STORE:
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command STORE|\n",tot_cycles, thread->idx);
+			#endif				
 			thread->status = 1 + store_latencty;
 			if(inst.isSrc2Imm){				
 				SIM_MemDataWrite(thread->regs[inst.dst_index] + inst.src2_index_imm, thread->regs[inst.src1_index]);
@@ -198,6 +229,9 @@ void Simulator::runInst(Thread* thread){
 			break;		
 
 		case CMD_HALT:
+			#ifdef DEBUG_PRINT
+			printf("|Cycle %d|Thread %d|Command HALT|\n",tot_cycles, thread->idx);
+			#endif				
 			thread->status = HALT;
 			tot_halts ++;
 			break;
@@ -218,6 +252,12 @@ void Simulator::simUpdate(){
 	tot_cycles++;
 }
 
+void copyArray(tcontext* dst, int* src, int len, int threadid){
+	for(int i = 0; i < len; i++){
+		dst[threadid].reg[i] = src[i];
+	}
+	return;
+}
 //###############################
 
 Simulator* blocked_sim = NULL;
@@ -225,15 +265,35 @@ Simulator* fine_grained_sim = NULL;
 
 void CORE_BlockedMT(){
 	blocked_sim = new Simulator(BLOCKED_MT);
-	for(int idx = 0; idx < blocked_sim->tot_threads; idx++){
-		while(blocked_sim->threads_vec[idx]->status != HALT){
-			if(blocked_sim->threads_vec[idx]->status == READY){
-				blocked_sim->runInst(blocked_sim->threads_vec[idx]);
-			}
+
+	//first thread to run
+	Thread* runnig_thread = blocked_sim->threads_vec[0];	
+	while(blocked_sim->tot_halts != blocked_sim->tot_threads){
+		while(runnig_thread->status == READY){
+			blocked_sim->runInst(runnig_thread);
 			blocked_sim->simUpdate();
 		}
-		blocked_sim->contextSwitch(blocked_sim->threads_vec[idx]);
-	}
+
+		// current running thread cannot run in current cycle
+		// finds other thread (if exsits) to run
+		// if found -> context switch
+		if(blocked_sim->getReadyThread(runnig_thread) != NULL){
+			runnig_thread = blocked_sim->contextSwitch(runnig_thread);
+		}
+		else if(blocked_sim->tot_halts == blocked_sim->tot_threads){
+			break;
+		}
+		else{
+			#ifdef DEBUG_PRINT
+			printf("			idle\n");			
+			#endif
+			blocked_sim->simUpdate();			
+		}
+	}		
+
+	#ifdef DEBUG_PRINT
+	printf("\n|CYCLES %d|INSTRUCTIONS %d\n", blocked_sim->tot_cycles, blocked_sim->tot_inst);
+	#endif
 }
 
 void CORE_FinegrainedMT(){
@@ -245,9 +305,15 @@ void CORE_FinegrainedMT(){
 		if(runnig_thread->status == READY){
 			fine_grained_sim->runInst(runnig_thread);
 		}
+
+		//cycle = next cycle
 		fine_grained_sim->simUpdate();
 		runnig_thread = fine_grained_sim->contextSwitch(runnig_thread);
 	}
+
+	#ifdef DEBUG_PRINT
+	printf("\n|CYCLES %d|INSTRUCTIONS %d\n", fine_grained_sim->tot_cycles, fine_grained_sim->tot_inst);
+	#endif	
 }
 
 double CORE_BlockedMT_CPI(){
@@ -265,11 +331,12 @@ double CORE_FinegrainedMT_CPI(){
 }
 
 void CORE_BlockedMT_CTX(tcontext* context, int threadid){
-	copy_n(blocked_sim->threads_vec[threadid]->regs, REGS_COUNT, context->reg);
+	//copy_n(blocked_sim->threads_vec[threadid]->regs, REGS_COUNT, context->reg);
+	copyArray(context, blocked_sim->threads_vec[threadid]->regs, REGS_COUNT, threadid);
 	return;
 }
 
 void CORE_FinegrainedMT_CTX(tcontext* context, int threadid){
-	copy_n(fine_grained_sim->threads_vec[threadid]->regs, REGS_COUNT, context->reg);
+	copyArray(context, fine_grained_sim->threads_vec[threadid]->regs, REGS_COUNT, threadid);
 	return;	
 }
